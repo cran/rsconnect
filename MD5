@@ -1,4 +1,4 @@
-fcbe159bea1fde5beef0edc20a381c67 *DESCRIPTION
+36880f0b3862d42100344b5b94299750 *DESCRIPTION
 427ab7ac2e0ca67217ed4749bf25c172 *NAMESPACE
 cff8534ef22c0bdb95c6037fcea5bc74 *R/accounts.R
 d13ae61a61a925efa7d63e84638ee345 *R/applications.R
@@ -54,7 +54,7 @@ bf0eb6b87c38b2bb8aa11a3bc562433d *man/linter.Rd
 846a2554ba89618a5a4aee9e65721f66 *man/makeLinterMessage.Rd
 d4297f272e0653b826ad6b2adb701214 *man/options.Rd
 775faea4c583e994d1b7f82b64ec8fed *man/packages.Rd
-baa794ec9d4c543f6e278f3818beb426 *man/proxies.Rd
+4d611c0f73c70247eb521ea87fdbe88f *man/proxies.Rd
 1ad302fa4208bbfd9118b06edf8d7af5 *man/removeAuthorizedUser.Rd
 9192073096ba044bf98accc6c86652e6 *man/restartApp.Rd
 fb18f9ac05972441dcb6ade14abc7173 *man/rpubsUpload.Rd
