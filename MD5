@@ -1,9 +1,9 @@
-36880f0b3862d42100344b5b94299750 *DESCRIPTION
-427ab7ac2e0ca67217ed4749bf25c172 *NAMESPACE
+8548d3bb6f6f7f56cccc6b7a3e63da58 *DESCRIPTION
+c93cc6748f66f847d9e1d27506fdee2b *NAMESPACE
 cff8534ef22c0bdb95c6037fcea5bc74 *R/accounts.R
 d13ae61a61a925efa7d63e84638ee345 *R/applications.R
 8424bebb2a0beee59ea679dd51a46c0d *R/auth.R
-ae5084d59d938a071eae68a37ebb9a15 *R/bundle.R
+3451cf6ad03f03e49070cfbc3667d3db *R/bundle.R
 b14c2412d4590c93553bdc9cd50cf521 *R/client.R
 6a982c846156bed0d76db4f3ad1b2e07 *R/config.R
 b52dfe336f8c1864ef4360dfc7a0ca16 *R/configureApp.R
@@ -11,6 +11,7 @@ b52dfe336f8c1864ef4360dfc7a0ca16 *R/configureApp.R
 90ee6bd083f9362889cf2bf359cbf387 *R/dependencies.R
 b70e625c201908d5e44a9ff830a518a7 *R/deployApp.R
 7fca9a6e4f4aba40b8c24fe77061a040 *R/deployDoc.R
+060d8eac49c6a7390ea5cddcd0c89be0 *R/deploySite.R
 d8988fe18c53f0a75ac0bfc916d638ed *R/deployments.R
 944ed36c2f9d4030253d26ea486ab278 *R/http.R
 67cdbb9d22b484f86dda633a799cde52 *R/ide.R
@@ -48,6 +49,7 @@ e224b0ad5d4690fcb42a6d40774e9231 *man/appDependencies.Rd
 94956d4347e48e58d1c946077a7a26b7 *man/connectUser.Rd
 617f0a7632346c204d639f439263ee3a *man/deployApp.Rd
 81e4a73ac89f4368c3d86d3f6c0f61f7 *man/deployDoc.Rd
+23a175a3cf0ebf3377df731fdd358ada *man/deploySite.Rd
 fd650d746beacaff226a7164db44d9c3 *man/deployments.Rd
 f41ec397391215d328db9afc28bb051b *man/lint.Rd
 bf0eb6b87c38b2bb8aa11a3bc562433d *man/linter.Rd
