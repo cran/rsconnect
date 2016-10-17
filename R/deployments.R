@@ -1,11 +1,32 @@
 
 
-saveDeployment <- function(appPath, name, account, server, appId, bundleId, url,
-                           metadata) {
+saveDeployment <- function(appPath, name, title, account, server, appId,
+                           bundleId, url, metadata) {
+
+  # if there's no new title specified, load the existing deployment record, if
+  # any, to to preserve the old title
+  if (is.null(title) || is.na(title) || length(title) == 0 ||
+      nchar(title) == 0) {
+    tryCatch({
+      path <- deploymentFile(appPath, name, account, server)
+      if (file.exists(path)) {
+        deployment <- as.data.frame(read.dcf(path))
+        title <- as.character(deployment$title[[1]])
+
+        # use empty string rather than character(0) if title isn't specified
+        # in the record
+        if (length(title) == 0)
+          title <- ""
+      }
+    }, error = function(e) {
+      # no action needed here (we just won't write a title)
+      title <<- ""
+    })
+  }
 
   # create the record to write to disk
-  deployment <- deploymentRecord(name, account, server, appId, bundleId, url,
-                                 when = as.numeric(Sys.time()),
+  deployment <- deploymentRecord(name, title, account, server, appId, bundleId,
+                                 url, when = as.numeric(Sys.time()),
                                  metadata)
 
   # use a long width so URLs don't line-wrap
@@ -102,6 +123,7 @@ deployments <- function(appPath, nameFilter = NULL, accountFilter = NULL,
 
   # build list of deployment records
   deploymentRecs <- deploymentRecord(name = character(),
+                                     title = character(),
                                      account = character(),
                                      server = character(),
                                      appId = character(),
@@ -173,11 +195,12 @@ deploymentFile <- function(appPath, name, account, server) {
   file.path(accountDir, paste0(name, ".dcf"))
 }
 
-deploymentRecord <- function(name, account, server, appId, bundleId, url, when,
-                             metadata = list()) {
+deploymentRecord <- function(name, title, account, server, appId, bundleId, url,
+                             when, metadata = list()) {
   # compose the standard set of fields and append any requested
   as.data.frame(c(
       list(name = name,
+           title = if (is.null(title)) "" else title,
            account = account,
            server = server,
            appId = appId,
