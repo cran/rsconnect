@@ -18,8 +18,32 @@ bundleAppDir <- function(appDir, appFiles, appPrimaryDoc = NULL) {
     if (!file.exists(dirname(to)))
       dir.create(dirname(to), recursive = TRUE)
     file.copy(from, to)
+
+    # ensure .Rprofile doesn't call packrat/init.R
+    if (basename(to) == ".Rprofile") {
+      origRprofile <- readLines(to)
+      msg <- paste0("# Modified by rsconnect package ", packageVersion("rsconnect"), " on ", Sys.time(), ":")
+      replacement <- paste(msg,
+                           "# Packrat initialization disabled in published application",
+                           '# source(\"packrat/init.R\")', sep="\n")
+      newRprofile <- gsub( 'source(\"packrat/init.R\")',
+                           replacement,
+                           origRprofile, fixed = TRUE)
+      cat(newRprofile, file=to, sep="\n")
+    }
+
   }
   bundleDir
+}
+
+isKnitrCacheDir <- function(subdir, contents) {
+  if (grepl("^.+_cache$", subdir)) {
+    stem <- substr(subdir, 1, nchar(subdir) - nchar("_cache"))
+    rmd <- paste0(stem, ".Rmd")
+    tolower(rmd) %in% tolower(contents)
+  } else {
+    FALSE
+  }
 }
 
 maxDirectoryList <- function(dir, parent, totalSize) {
@@ -51,6 +75,10 @@ maxDirectoryList <- function(dir, parent, totalSize) {
       # ignore known directories from the root
       if (nchar(parent) == 0 && subdir %in% c(
            "rsconnect", "packrat", ".svn", ".git", ".Rproj.user"))
+        next
+
+      # ignore knitr _cache directories
+      if (isKnitrCacheDir(subdir, contents))
         next
 
       # get the list of files in the subdirectory
@@ -470,7 +498,22 @@ addPackratSnapshot <- function(bundleDir, implicit_dependencies = c()) {
   }
 
   # generate the packrat snapshot
-  performPackratSnapshot(bundleDir)
+  tryCatch({
+    performPackratSnapshot(bundleDir)
+  }, error = function(e) {
+    # if an error occurs while generating the snapshot, add a header to the
+    # message for improved attribution
+    e$msg <- paste0("----- Error snapshotting dependencies (Packrat) -----\n",
+                    e$msg)
+
+    # print a traceback if enabled
+    if (isTRUE(getOption("rsconnect.error.trace"))) {
+      traceback(3, sys.calls())
+    }
+
+    # rethrow error so we still halt deployment
+    stop(e)
+  })
 
   # if we emitted a temporary dependency file for packrat's benefit, remove it
   # now so it isn't included in the bundle sent to the server
@@ -543,6 +586,12 @@ performPackratSnapshot <- function(bundleDir) {
   packrat::opts$snapshot.recommended.packages(TRUE, persist = FALSE)
   on.exit(packrat::opts$snapshot.recommended.packages(srp, persist = FALSE),
           add = TRUE)
+
+  # attempt to eagerly load the BiocInstaller package if installed, to work
+  # around an issue where attempts to load the package could fail within a
+  # 'suppressMessages()' context
+  if (length(find.package("BiocInstaller", quiet = TRUE)))
+    requireNamespace("BiocInstaller", quietly = TRUE)
 
   # generate a snapshot
   suppressMessages(

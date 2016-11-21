@@ -2,8 +2,8 @@ Package: rsconnect
 Type: Package
 Title: Deployment Interface for R Markdown Documents and Shiny
         Applications
-Version: 0.5
-Date: 2016-10-16
+Version: 0.6
+Date: 2016-11-21
 Author: JJ Allaire
 Maintainer: JJ Allaire <jj@rstudio.com>
 Description: Programmatic deployment interface for 'RPubs', 'shinyapps.io', and
@@ -17,6 +17,6 @@ Enhances: BiocInstaller
 License: GPL-2
 RoxygenNote: 5.0.1
 NeedsCompilation: no
-Packaged: 2016-10-16 23:31:08 UTC; jjallaire
+Packaged: 2016-11-21 16:26:59 UTC; jjallaire
 Repository: CRAN
-Date/Publication: 2016-10-17 01:50:35
+Date/Publication: 2016-11-21 21:22:47
