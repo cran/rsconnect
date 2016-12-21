@@ -1,4 +1,4 @@
-d3ea593de2e8ee15ef586e76a0574db0 *DESCRIPTION
+246c862549ae035fe376edc3d1c90041 *DESCRIPTION
 a8e4b139910cce5d821bb3165163d8eb *NAMESPACE
 cff8534ef22c0bdb95c6037fcea5bc74 *R/accounts.R
 328d0a9600c86a64ce060969ac91af6f *R/applications.R
@@ -9,9 +9,9 @@ b14c2412d4590c93553bdc9cd50cf521 *R/client.R
 c79a575f169982bf557f61fba817c86b *R/configureApp.R
 eefb1a5bea69a04db18a28b4f469df9e *R/connect.R
 90ee6bd083f9362889cf2bf359cbf387 *R/dependencies.R
-95c3eeb55d6ef4d6486b10508524e1ef *R/deployApp.R
+b63b34f3a9c44ae2a090cb8a44d32a2c *R/deployApp.R
 36b4be12142af0178337a12fcf332835 *R/deployDoc.R
-89bf53d7ae01cd3c5ab590fcd906f8f1 *R/deploySite.R
+587f27b1d04f530caca2d65e9a759791 *R/deploySite.R
 561cd5815502c8c69f5851bd61475f75 *R/deployments.R
 60733ab0d105c5be66bd88a34b2ef11c *R/http.R
 67cdbb9d22b484f86dda633a799cde52 *R/ide.R
@@ -20,7 +20,7 @@ c6838a7a11e1b08263e2ec7044533976 *R/lint-framework.R
 656b8c97713c1a6ef464624ad2ea4580 *R/lint-utils.R
 5c33c426bc1e45459b531dae01662b02 *R/linters.R
 2887d129be2b23082bb3adb769a1ed1f *R/locale.R
-139ce15d4ba7a8327ae5056cf8a6b822 *R/lucid.R
+51bc547513b14ce789ddec0ddb68596a *R/lucid.R
 dd944a661d9b24d3848e89c487b1a3e3 *R/onLoad.R
 06602a17899439afadcb22d1f3545b23 *R/restartApp.R
 d74faa72d6f53434a620351194da59c6 *R/rmdindex.R
@@ -51,7 +51,7 @@ e224b0ad5d4690fcb42a6d40774e9231 *man/appDependencies.Rd
 94956d4347e48e58d1c946077a7a26b7 *man/connectUser.Rd
 5607ad9c5eefd3194a75b80ac1a5e79b *man/deployApp.Rd
 81e4a73ac89f4368c3d86d3f6c0f61f7 *man/deployDoc.Rd
-d9866aa54f8f098cb6eccd9543c422c0 *man/deploySite.Rd
+7b8a97c1eeecb47acb3bc7f8a50eaf19 *man/deploySite.Rd
 fd650d746beacaff226a7164db44d9c3 *man/deployments.Rd
 f36da5071300ba41c04cccc4da51f46b *man/generateAppName.Rd
 f41ec397391215d328db9afc28bb051b *man/lint.Rd
