@@ -59,7 +59,7 @@ connectClient <- function(service, authInfo) {
     },
 
     currentUser = function() {
-      handleResponse(GET(service, authInfo, "/users/current/"))
+      handleResponse(GET(service, authInfo, "/users/current"))
     },
 
     ## Tokens API
@@ -71,18 +71,13 @@ connectClient <- function(service, authInfo) {
                                token))
     },
 
-    getToken = function(tokenId) {
-      handleResponse(GET(service, authInfo,
-                         file.path("/tokens", tokenId)))
-    },
-
     ## Applications API
 
     listApplications = function(accountId, filters = NULL) {
       if (is.null(filters)) {
         filters <- vector()
       }
-      path <- "/applications/"
+      path <- "/applications"
       query <- paste(filterQuery(
         c("account_id", names(filters)),
         c(accountId, unname(filters))

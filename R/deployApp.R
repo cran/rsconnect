@@ -1,6 +1,6 @@
 #' Deploy an Application
 #'
-#' Deploy a \link[shiny:shiny-package]{shiny} application, an R Markdown
+#' Deploy a Shiny application, an R Markdown
 #' document, or HTML content to a server.
 #'
 #' @param appDir Directory containing application. Defaults to current working
@@ -318,35 +318,15 @@ deployApp <- function(appDir = getwd(),
   deploymentSucceeded <- if (is.null(response$code) || response$code == 0) {
     displayStatus(paste0(capitalize(assetTypeName), " successfully deployed ",
                          "to ", application$url, "\n"))
-    # function to browse to a URL using user-supplied browser (config or final)
-    showURL <- function(url) {
-      if (isTRUE(launch.browser))
-        utils::browseURL(url)
-      else if (is.function(launch.browser))
-        launch.browser(url)
-    }
-
-    # if this client supports config, see if the app needs it
-    if (!quiet && !is.null(client$configureApplication)) {
-      config <- client$configureApplication(application$id)
-      # Open app in Dashboard for publishing or further configuration.
-      # Preserve compatibility with older versions of connect by checking
-      # to see if config$config_url is set.
-      if (!(is.null(config$config_url) || config$config_url == '')) {
-        showURL(config$config_url)
-        return(invisible(TRUE))
-      }
-    }
-
-    # launch the browser if requested
-    showURL(application$url)
-
     TRUE
   } else {
     displayStatus(paste0(capitalize(assetTypeName), " deployment failed ",
                          "with error: ", response$error, "\n"))
     FALSE
   }
+
+  if (!quiet)
+    openURL(client, application, launch.browser, deploymentSucceeded)
 
   if (verbose) {
     cat("----- Deployment log finished at ", as.character(Sys.time()), " -----\n")
@@ -531,3 +511,29 @@ applicationForTarget <- function(client, accountInfo, target) {
   # return the application
   app
 }
+
+
+openURL <- function(client, application, launch.browser, deploymentSucceeded) {
+
+  # function to browse to a URL using user-supplied browser (config or final)
+  showURL <- function(url) {
+    if (isTRUE(launch.browser))
+      utils::browseURL(url)
+    else if (is.function(launch.browser))
+      launch.browser(url)
+  }
+
+  # Check to see if we should open config url or app url
+  if (!is.null(client$configureApplication)) {
+    config <- client$configureApplication(application$id)
+    if (!(is.null(config$config_url) || config$config_url == '')) {
+      # Connect should always end up here, even on deployment failures
+      showURL(config$config_url)
+    }
+  } else if (deploymentSucceeded) {
+    # shinyapps.io should land here if things succeeded
+    showURL(application$url)
+  }
+    # or open no url if things failed
+}
+

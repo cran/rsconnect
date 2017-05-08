@@ -19,7 +19,10 @@ multiple servers (see \code{\link{servers}})}
 during the termination.}
 }
 \description{
-Terminate an application currently running on a remote server.
+Terminate and archive a currently deployed ShinyApps application.
+}
+\note{
+This function only works for ShinyApps servers.
 }
 \examples{
 \dontrun{
@@ -32,4 +35,3 @@ terminateApp("myapp")
 \code{\link{applications}}, \code{\link{deployApp}}, and
   \code{\link{restartApp}}
 }
-
