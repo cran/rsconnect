@@ -1,7 +1,7 @@
 #' Deploy an Application
 #'
-#' Deploy a Shiny application, an R Markdown
-#' document, or HTML content to a server.
+#' Deploy a \link[shiny:shiny-package]{shiny} application, an R Markdown
+#' document, a plumber API, or HTML content to a server.
 #'
 #' @param appDir Directory containing application. Defaults to current working
 #'   directory.
@@ -26,6 +26,8 @@
 #'   supplied, will often be displayed in favor of the name. When deploying a
 #'   new application, you may supply only the \code{appTitle} to receive an
 #'   auto-generated \code{appName}.
+#' @param appId If updating an application, the ID of the application being
+#'   updated. Optional unless updating an app owned by another user.
 #' @param contentCategory Optional; the kind of content being deployed (e.g.
 #'   \code{"plot"}, \code{"document"}, or \code{"application"}).
 #' @param account Account to deploy application to. This
@@ -81,6 +83,7 @@ deployApp <- function(appDir = getwd(),
                       appSourceDoc = NULL,
                       appName = NULL,
                       appTitle = NULL,
+                      appId = NULL,
                       contentCategory = NULL,
                       account = NULL,
                       server = NULL,
@@ -263,9 +266,21 @@ deployApp <- function(appDir = getwd(),
   # initialize connect client
 
   # determine the deployment target and target account info
-  target <- deploymentTarget(appPath, appName, appTitle, account, server)
+  target <- deploymentTarget(appPath, appName, appTitle, appId, account, server)
   accountDetails <- accountInfo(target$account, target$server)
   client <- clientForAccount(accountDetails)
+
+  if(verbose){
+    urlstr <- serverInfo(accountDetails$server)$url
+    url <- parseHttpUrl(urlstr)
+    cat("Cookies:", "\n")
+    host <- getCookieHost(url)
+    if (exists(host, .cookieStore)){
+      print(get(host, envir=.cookieStore))
+    } else {
+      print("None")
+    }
+  }
 
   # get the application to deploy (creates a new app on demand)
   withStatus(paste0("Preparing to deploy ", assetTypeName), {
@@ -279,25 +294,64 @@ deployApp <- function(appDir = getwd(),
     withStatus(paste0("Uploading bundle for ", assetTypeName, ": ",
                      application$id), {
       bundlePath <- bundleApp(target$appName, appDir, appFiles,
-                              appPrimaryDoc, assetTypeName, contentCategory)
-      bundle <- client$uploadApplication(application$id, bundlePath)
+                              appPrimaryDoc, assetTypeName, contentCategory, verbose)
+
+      if (isShinyapps(accountDetails)) {
+
+        # Step 1. Create presigned URL and register pending bundle.
+        bundleSize <- file.info(bundlePath)$size
+
+        # Generate a hex-encoded md5 hash.
+        checkSum <- digest::digest(bundlePath, 'md5', file=TRUE)
+        bundle <- client$createBundle(application$id, "application/x-tar", bundleSize, checkSum)
+
+        if (verbose)
+          timestampedLog("Starting upload now")
+        # Step 2. Upload Bundle to presigned URL
+        if (!uploadBundle(bundle, bundleSize, bundlePath)) {
+          stop("Could not upload file.")
+        }
+        if (verbose)
+          timestampedLog("Upload complete")
+
+        # Step 3. Upload revise bundle status.
+        response <- client$updateBundleStatus(bundle$id, status="ready")
+
+        # Step 4. Retrieve updated bundle post status change - which is required in subsequent
+        # areas of the code below.
+        bundle <- client$getBundle(bundle$id)
+
+      } else {
+        bundle <- client$uploadApplication(application$id, bundlePath)
+      }
     })
   } else {
     # redeploy current bundle
     bundle <- application$deployment$bundle
   }
 
-  # save the deployment info for subsequent updates--we do this before
-  # attempting the deployment itself to make retry easy on failure
-  saveDeployment(appPath,
-                 target$appName,
-                 target$appTitle,
-                 target$account,
-                 accountDetails$server,
-                 application$id,
-                 bundle$id,
-                 application$url,
-                 metadata)
+  # write a deployment record only if this is the account that owns the content
+  if (is.null(application$owner_username) ||
+      accountDetails$username == application$owner_username) {
+    # save the deployment info for subsequent updates--we do this before
+    # attempting the deployment itself to make retry easy on failure.
+    if (verbose)
+      timestampedLog("Saving deployment record for", target$appName, "-", target$username)
+    saveDeployment(appPath,
+                   target$appName,
+                   target$appTitle,
+                   target$username,
+                   target$account,
+                   accountDetails$server,
+                   serverInfo(target$server)$hostUrl,
+                   application$id,
+                   bundle$id,
+                   application$url,
+                   metadata)
+  } else if (verbose) {
+    timestampedLog("Updating", target$appName, ", owned by", application$owner_username,
+        ", from account", accountDetails$username)
+  }
 
   # wait for the deployment to complete (will raise an error if it can't)
   displayStatus(paste0("Deploying bundle: ", bundle$id,
@@ -337,7 +391,7 @@ deployApp <- function(appDir = getwd(),
 
 # calculate the deployment target based on the passed parameters and
 # any saved deployments that we have
-deploymentTarget <- function(appPath, appName, appTitle, account,
+deploymentTarget <- function(appPath, appName, appTitle, appId, account,
                              server = NULL) {
 
   # read existing accounts
@@ -356,19 +410,50 @@ deploymentTarget <- function(appPath, appName, appTitle, account,
   # read existing deployments
   appDeployments <- deployments(appPath = appPath)
 
+  # function to compute the target username from a deployment
+  usernameFromDeployment <- function(deployment) {
+    # determine which username on the serve owns the application
+    if (!is.null(appDeployments$username)) {
+      # read from the deployment record if supplied
+      username <- appDeployments$username
+    } else {
+      # lookup account info if not
+      username <- accountInfo(appDeployments$account)$username
+    }
+    username
+  }
+
   # function to create a deployment target list (checks whether the target
   # is an update and adds that field)
-  createDeploymentTarget <- function(appName, appTitle, account, server) {
+  createDeploymentTarget <- function(appName, appTitle, appId,
+                                     username, account, server) {
+    # look up the server URL
+    serverDetails <- serverInfo(server)
 
-    # check to see whether this is an update
-    existingDeployment <- deployments(appPath,
-                                      nameFilter = appName,
-                                      accountFilter = account,
-                                      serverFilter = server)
-    isUpdate <- nrow(existingDeployment) == 1
+    # look for an application ID if we weren't supplied one
+    if (is.null(appId))
+    {
+      existingDeployments <- deployments(appPath, nameFilter = appName)
+      for (i in seq_len(nrow(existingDeployments))) {
+        if (identical(existingDeployments[[i, "account"]], account) &&
+            identical(existingDeployments[[i, "server"]], server))
+        {
+          # account and server matches a locally configured account
+          appId <- existingDeployments[[i, "appId"]]
+          break
+        }
+        else if (identical(existingDeployments[[i, "username"]], username) &&
+                 identical(existingDeployments[[i, "host"]], serverDetails$url))
+        {
+          # username and host match the user and host we're deploying to
+          appId <- existingDeployments[[i, "appId"]]
+          break
+        }
+      }
+    }
 
-    list(appName = appName, appTitle = appTitle, account = account,
-         isUpdate = isUpdate, server = server)
+    list(appName = appName, appTitle = appTitle, appId = appId, username = username,
+         account = account, server = server)
   }
 
   # if appTitle specified but not appName, generate name from title
@@ -378,9 +463,8 @@ deploymentTarget <- function(appPath, appName, appTitle, account,
 
   # both appName and account explicitly specified
   if (!is.null(appName) && !is.null(account)) {
-
-    createDeploymentTarget(appName, appTitle, account, server)
-
+    accountDetails <- accountInfo(account, server)
+    createDeploymentTarget(appName, appTitle, appId, accountDetails$username, account, server)
   }
 
   # just appName specified
@@ -396,7 +480,7 @@ deploymentTarget <- function(appPath, appName, appTitle, account,
       if (length(accounts) == 1) {
         # read the server associated with the account
         accountDetails <- accountInfo(accounts, server)
-        createDeploymentTarget(appName, appTitle, accounts,
+        createDeploymentTarget(appName, appTitle, appId, accountDetails$username, accounts,
                                accountDetails$server)
       } else {
         stopWithSpecifyAccount()
@@ -405,7 +489,8 @@ deploymentTarget <- function(appPath, appName, appTitle, account,
 
     # single existing deployment
     else if (nrow(appDeployments) == 1) {
-      createDeploymentTarget(appName, appTitle, appDeployments$account,
+      createDeploymentTarget(appName, appTitle, appId,
+                             usernameFromDeployment(appDeployments), appDeployments$account,
                              appDeployments$server)
     }
 
@@ -430,17 +515,17 @@ deploymentTarget <- function(appPath, appName, appTitle, account,
     accountDetails <- accountInfo(account, server)
     createDeploymentTarget(
       generateAppName(appTitle, appPath, account, unique = FALSE),
-      appTitle, account, accountDetails$server)
+      appTitle, appId, accountDetails$username, account, accountDetails$server)
   }
 
   # neither specified but a single existing deployment
   else if (nrow(appDeployments) == 1) {
-
     createDeploymentTarget(appDeployments$name,
                            appDeployments$title,
+                           appDeployments$appId,
+                           usernameFromDeployment(appDeployments),
                            appDeployments$account,
                            appDeployments$server)
-
   }
 
   # neither specified and no existing deployments
@@ -451,7 +536,8 @@ deploymentTarget <- function(appPath, appName, appTitle, account,
       accountDetails <- accountInfo(accounts)
       createDeploymentTarget(
         generateAppName(appTitle, appPath, account, unique = FALSE),
-        appTitle, accounts, accountDetails$server)
+        appTitle, appId, accountDetails$username,
+        accounts, accountDetails$server)
     }
     else
       stop("Please specify the account and server to which you want to deploy ",
@@ -479,22 +565,48 @@ getAppByName <- function(client, accountInfo, name) {
   if (length(app)) app[[1]] else NULL
 }
 
-# get the record for the application with the given ID in the given account
-getAppById <- function(id, account = NULL, server = NULL) {
-  accountDetails <- accountInfo(resolveAccount(account, server), server)
+# get the record for the application with the given ID in the given account;
+# this isn't used inside the package itself but is invoked from the RStudio IDE
+# to look up app details
+getAppById <- function(id, account = NULL, server = NULL, hostUrl = NULL) {
+  accountDetails <- NULL
+  tryCatch({
+    # attempt to look up the account locally
+    accountDetails <- accountInfo(resolveAccount(account, server), server)
+  }, error = function(e) {
+    # we'll retry below
+  })
+
+  if (is.null(accountDetails)) {
+    if (is.null(hostUrl)) {
+      # rethrow if no host url to go on
+      stop("No account '", account, "' found and no host URL specified.",
+           call. = FALSE)
+    }
+
+    # no account details yet, look up from the host URL if we have one
+    accountDetails <- accountInfoFromHostUrl(hostUrl)
+  }
+
+  # create the appropriate client and fetch the application
   client <- clientForAccount(accountDetails)
   client$getApplication(id)
 }
 
 applicationForTarget <- function(client, accountInfo, target) {
 
-  # list the existing applications for this account and see if we
-  # need to create a new application
-  app <- getAppByName(client, accountInfo, target$appName)
+  if (is.null(target$appId)) {
+    # list the existing applications for this account and see if we
+    # need to create a new application
+    app <- getAppByName(client, accountInfo, target$appName)
+  } else {
+    # we already know the app's id, so just retrieve the rest of the metadata
+    app <- client$getApplication(target$appId)
+  }
 
   # if there is no record of deploying this application locally however there
   # is an application of that name already deployed then confirm
-  if (!target$isUpdate && !is.null(app) && interactive()) {
+  if (!is.null(target$appId) && !is.null(app) && interactive()) {
     prompt <- paste("Update application currently deployed at\n", app$url,
                     "? [Y/n] ", sep="")
     input <- readline(prompt)

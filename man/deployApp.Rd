@@ -6,7 +6,7 @@
 \usage{
 deployApp(appDir = getwd(), appFiles = NULL, appFileManifest = NULL,
   appPrimaryDoc = NULL, appSourceDoc = NULL, appName = NULL,
-  appTitle = NULL, contentCategory = NULL, account = NULL,
+  appTitle = NULL, appId = NULL, contentCategory = NULL, account = NULL,
   server = NULL, upload = TRUE,
   launch.browser = getOption("rsconnect.launch.browser", interactive()),
   logLevel = c("normal", "quiet", "verbose"), lint = TRUE,
@@ -43,6 +43,9 @@ supplied, will often be displayed in favor of the name. When deploying a
 new application, you may supply only the \code{appTitle} to receive an
 auto-generated \code{appName}.}
 
+\item{appId}{If updating an application, the ID of the application being
+updated. Optional unless updating an app owned by another user.}
+
 \item{contentCategory}{Optional; the kind of content being deployed (e.g.
 \code{"plot"}, \code{"document"}, or \code{"application"}).}
 
@@ -75,8 +78,8 @@ record. These fields will be returned on subsequent calls to
 \code{\link{deployments}}.}
 }
 \description{
-Deploy a Shiny application, an R Markdown
-document, or HTML content to a server.
+Deploy a \link[shiny:shiny-package]{shiny} application, an R Markdown
+document, a plumber API, or HTML content to a server.
 }
 \examples{
 \dontrun{
