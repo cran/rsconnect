@@ -7,19 +7,22 @@
 \alias{addServer}
 \alias{removeServer}
 \alias{serverInfo}
+\alias{addServerCertificate}
 \title{Server Management Functions}
 \usage{
 servers(local = FALSE)
 
 discoverServers(quiet = FALSE)
 
-addConnectServer(url, name = NULL, quiet = FALSE)
+addConnectServer(url, name = NULL, certificate = NULL, quiet = FALSE)
 
-addServer(url, name = NULL, quiet = FALSE)
+addServer(url, name = NULL, certificate = NULL, quiet = FALSE)
 
 removeServer(name)
 
 serverInfo(name)
+
+addServerCertificate(name, certificate, quiet = FALSE)
 }
 \arguments{
 \item{local}{Return only local servers (i.e. not \code{shinyapps.io})}
@@ -31,6 +34,11 @@ serverInfo(name)
 
 \item{name}{Optional nickname for the server. If none is given, the nickname
 is inferred from the server's hostname.}
+
+\item{certificate}{Optional; a path a certificate file to be used when making
+SSL connections to the server. The file's contents are copied and stored by
+the \pkg{rsconnect} package. Can also be a character vector containing the
+certificate's contents.}
 }
 \value{
 \code{servers} returns a data frame with registered server names and URLs.

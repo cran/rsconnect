@@ -51,6 +51,9 @@
 #' @param metadata Additional metadata fields to save with the deployment
 #'   record. These fields will be returned on subsequent calls to
 #'   \code{\link{deployments}}.
+#' @param forceUpdate If \code{TRUE}, update any previously-deployed app without asking.
+#'   If \code{FALSE}, ask to update. If unset, defaults to the value of
+#'   \code{getOption("rsconnect.force.update.apps", FALSE)}.
 #' @examples
 #' \dontrun{
 #'
@@ -92,7 +95,8 @@ deployApp <- function(appDir = getwd(),
                                                  interactive()),
                       logLevel = c("normal", "quiet", "verbose"),
                       lint = TRUE,
-                      metadata = list()) {
+                      metadata = list(),
+                      forceUpdate = getOption("rsconnect.force.update.apps", FALSE)) {
 
   if (!isStringParam(appDir))
     stop(stringParamErrorMessage("appDir"))
@@ -284,7 +288,7 @@ deployApp <- function(appDir = getwd(),
 
   # get the application to deploy (creates a new app on demand)
   withStatus(paste0("Preparing to deploy ", assetTypeName), {
-    application <- applicationForTarget(client, accountDetails, target)
+    application <- applicationForTarget(client, accountDetails, target, forceUpdate)
   })
 
   if (upload) {
@@ -464,7 +468,8 @@ deploymentTarget <- function(appPath, appName, appTitle, appId, account,
   # both appName and account explicitly specified
   if (!is.null(appName) && !is.null(account)) {
     accountDetails <- accountInfo(account, server)
-    createDeploymentTarget(appName, appTitle, appId, accountDetails$username, account, server)
+    createDeploymentTarget(appName, appTitle, appId, accountDetails$username,
+                           account, accountDetails$server)
   }
 
   # just appName specified
@@ -593,7 +598,7 @@ getAppById <- function(id, account = NULL, server = NULL, hostUrl = NULL) {
   client$getApplication(id)
 }
 
-applicationForTarget <- function(client, accountInfo, target) {
+applicationForTarget <- function(client, accountInfo, target, forceUpdate) {
 
   if (is.null(target$appId)) {
     # list the existing applications for this account and see if we
@@ -606,7 +611,7 @@ applicationForTarget <- function(client, accountInfo, target) {
 
   # if there is no record of deploying this application locally however there
   # is an application of that name already deployed then confirm
-  if (!is.null(target$appId) && !is.null(app) && interactive()) {
+  if (!is.null(target$appId) && !is.null(app) && interactive() && !forceUpdate) {
     prompt <- paste("Update application currently deployed at\n", app$url,
                     "? [Y/n] ", sep="")
     input <- readline(prompt)
@@ -624,6 +629,9 @@ applicationForTarget <- function(client, accountInfo, target) {
   app
 }
 
+validURL <- function(url) {
+  !(is.null(url) || url == '')
+}
 
 openURL <- function(client, application, launch.browser, deploymentSucceeded) {
 
@@ -638,9 +646,15 @@ openURL <- function(client, application, launch.browser, deploymentSucceeded) {
   # Check to see if we should open config url or app url
   if (!is.null(client$configureApplication)) {
     config <- client$configureApplication(application$id)
-    if (!(is.null(config$config_url) || config$config_url == '')) {
+    url <- config$config_url
+    if (!deploymentSucceeded && validURL(config$logs_url)) {
+      # With 1.5.5+, Connect application configuration includes
+      # a logs URL to be shown on unsuccessful deployment.
+      url <- config$logs_url
+    }
+    if (validURL(url)) {
       # Connect should always end up here, even on deployment failures
-      showURL(config$config_url)
+      showURL(url)
     }
   } else if (deploymentSucceeded) {
     # shinyapps.io should land here if things succeeded
