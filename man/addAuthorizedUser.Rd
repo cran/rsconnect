@@ -4,8 +4,9 @@
 \alias{addAuthorizedUser}
 \title{Add authorized user to application}
 \usage{
-addAuthorizedUser(email, appDir = getwd(), appName = NULL, account = NULL,
-  server = NULL, sendEmail = NULL, emailMessage = NULL)
+addAuthorizedUser(email, appDir = getwd(), appName = NULL,
+  account = NULL, server = NULL, sendEmail = NULL,
+  emailMessage = NULL)
 }
 \arguments{
 \item{email}{Email address of user to add.}
@@ -35,5 +36,5 @@ Add authorized user to application
 This function works only for ShinyApps servers.
 }
 \seealso{
-\code{\link{removeAuthorizedUser}} and \code{\link{showUsers}}
+\code{\link[=removeAuthorizedUser]{removeAuthorizedUser()}} and \code{\link[=showUsers]{showUsers()}}
 }

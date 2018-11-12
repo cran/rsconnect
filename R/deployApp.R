@@ -1,59 +1,60 @@
 #' Deploy an Application
 #'
-#' Deploy a \link[shiny:shiny-package]{shiny} application, an R Markdown
-#' document, a plumber API, or HTML content to a server.
+#' Deploy a [shiny][shiny::shiny-package] application, an
+#' [RMarkdown][rmarkdown::rmarkdown-package] document, a plumber API, or HTML
+#' content to a server.
 #'
 #' @param appDir Directory containing application. Defaults to current working
 #'   directory.
 #' @param appFiles The files and directories to bundle and deploy (only if
-#'   \code{upload = TRUE}). Can be \code{NULL}, in which case all the files in
-#'   the directory containing the application are bundled. Takes precedence over
-#'   \code{appFileManifest} if both are supplied.
+#'   `upload = TRUE`). Can be `NULL`, in which case all the files in the
+#'   directory containing the application are bundled. Takes precedence over
+#'   `appFileManifest` if both are supplied.
 #' @param appFileManifest An alternate way to specify the files to be deployed;
 #'   a file containing the names of the files, one per line, relative to the
-#'   \code{appDir}.
+#'   `appDir`.
 #' @param appPrimaryDoc If the application contains more than one document, this
-#'   parameter indicates the primary one, as a path relative to \code{appDir}.
-#'   Can be \code{NULL}, in which case the primary document is inferred from the
-#'   contents being deployed.
+#'   parameter indicates the primary one, as a path relative to `appDir`. Can be
+#'   `NULL`, in which case the primary document is inferred from the contents
+#'   being deployed.
 #' @param appSourceDoc If the application is composed of static files (e.g
 #'   HTML), this parameter indicates the source document, if any, as a fully
-#'   qualified path. Deployment information returned by
-#'   \code{\link{deployments}} is associated with the source document.
-#' @param appName Name of application (names must be unique within an
-#'   account). Defaults to the base name of the specified \code{appDir}.
+#'   qualified path. Deployment information returned by [deployments()] is
+#'   associated with the source document.
+#' @param appName Name of application (names must be unique within an account).
+#'   Defaults to the base name of the specified `appDir`.
 #' @param appTitle Free-form descriptive title of application. Optional; if
 #'   supplied, will often be displayed in favor of the name. When deploying a
-#'   new application, you may supply only the \code{appTitle} to receive an
-#'   auto-generated \code{appName}.
+#'   new application, you may supply only the `appTitle` to receive an
+#'   auto-generated `appName`.
 #' @param appId If updating an application, the ID of the application being
 #'   updated. Optional unless updating an app owned by another user.
 #' @param contentCategory Optional; the kind of content being deployed (e.g.
-#'   \code{"plot"}, \code{"document"}, or \code{"application"}).
-#' @param account Account to deploy application to. This
-#'   parameter is only required for the initial deployment of an application
-#'   when there are multiple accounts configured on the system (see
-#'   \link{accounts}).
+#'   `"plot"` or `"site"`).
+#' @param account Account to deploy application to. This parameter is only
+#'   required for the initial deployment of an application when there are
+#'   multiple accounts configured on the system (see [accounts]).
 #' @param server Server name. Required only if you use the same account name on
 #'   multiple servers.
-#' @param upload If \code{TRUE} (the default) then the application is uploaded
-#'   from the local system prior to deployment. If \code{FALSE} then it is
-#'   re-deployed using the last version that was uploaded.
+#' @param upload If `TRUE` (the default) then the application is uploaded from
+#'   the local system prior to deployment. If `FALSE` then it is re-deployed
+#'   using the last version that was uploaded.
+#' @param recordDir Directory where publish record is written. Can be `NULL`
+#'   in which case record will be written to the location specified with `appDir`.
 #' @param launch.browser If true, the system's default web browser will be
-#'   launched automatically after the app is started. Defaults to \code{TRUE} in
+#'   launched automatically after the app is started. Defaults to `TRUE` in
 #'   interactive sessions only.
-#' @param logLevel One of \code{"quiet"}, \code{"normal"} or \code{"verbose"};
-#'   indicates how much logging to the console is to be performed. At
-#'   \code{"quiet"} reports no information; at \code{"verbose"}, a full
-#'   diagnostic log is captured.
+#' @param logLevel One of `"quiet"`, `"normal"` or `"verbose"`; indicates how
+#'   much logging to the console is to be performed. At `"quiet"` reports no
+#'   information; at `"verbose"`, a full diagnostic log is captured.
 #' @param lint Lint the project before initiating deployment, to identify
 #'   potentially problematic code?
 #' @param metadata Additional metadata fields to save with the deployment
 #'   record. These fields will be returned on subsequent calls to
-#'   \code{\link{deployments}}.
-#' @param forceUpdate If \code{TRUE}, update any previously-deployed app without asking.
-#'   If \code{FALSE}, ask to update. If unset, defaults to the value of
-#'   \code{getOption("rsconnect.force.update.apps", FALSE)}.
+#'   [deployments()].
+#' @param forceUpdate If `TRUE`, update any previously-deployed app without
+#'   asking. If `FALSE`, ask to update. If unset, defaults to the value of
+#'   `getOption("rsconnect.force.update.apps", FALSE)`.
 #' @examples
 #' \dontrun{
 #'
@@ -76,8 +77,8 @@
 #' # deploy but don't launch a browser when completed
 #' deployApp(launch.browser = FALSE)
 #' }
-#' @seealso \code{\link{applications}}, \code{\link{terminateApp}}, and
-#'   \code{\link{restartApp}}
+#' @seealso [applications()], [terminateApp()], and [restartApp()]
+#' @family Deployment functions
 #' @export
 deployApp <- function(appDir = getwd(),
                       appFiles = NULL,
@@ -91,6 +92,7 @@ deployApp <- function(appDir = getwd(),
                       account = NULL,
                       server = NULL,
                       upload = TRUE,
+                      recordDir = NULL,
                       launch.browser = getOption("rsconnect.launch.browser",
                                                  interactive()),
                       logLevel = c("normal", "quiet", "verbose"),
@@ -105,6 +107,9 @@ deployApp <- function(appDir = getwd(),
   logLevel <- match.arg(logLevel)
   quiet <- identical(logLevel, "quiet")
   verbose <- identical(logLevel, "verbose")
+
+  # run startup scripts to pick up any user options and establish pre/post deploy hooks
+  runStartupScripts(appDir, logLevel)
 
   # at verbose log level, turn on all tracing options implicitly for the
   # duration of the call
@@ -168,11 +173,23 @@ deployApp <- function(appDir = getwd(),
         grepl("\\.html?$", appDir, ignore.case = TRUE)) {
       return(deployDoc(appDir, appName = appName, appTitle = appTitle,
                        account = account, server = server, upload = upload,
-                       launch.browser = launch.browser, logLevel = logLevel,
-                       lint = lint))
+                       recordDir = recordDir, launch.browser = launch.browser,
+                       logLevel = logLevel, lint = lint))
     } else {
       stop(appDir, " must be a directory, an R Markdown document, or an HTML ",
            "document.")
+    }
+  }
+
+  # directory for recording deployment
+  if (is.null(recordDir)) {
+    recordDir <- appPath
+  } else {
+    if (!file.exists(recordDir)) {
+      stop(recordDir, " does not exist")
+    }
+    if (!file.info(recordDir)$isdir) {
+      stop(recordDir, " must be a directory")
     }
   }
 
@@ -182,6 +199,15 @@ deployApp <- function(appDir = getwd(),
     cat("Deploy command:", "\n", deparse(sys.call(1)), "\n\n")
     cat("Session information: \n")
     print(utils::sessionInfo())
+  }
+
+  # invoke pre-deploy hook if we have one
+  preDeploy <- getOption("rsconnect.pre.deploy")
+  if (is.function(preDeploy)) {
+    if (verbose) {
+      cat("Invoking pre-deploy hook rsconnect.pre.deploy\n")
+    }
+    preDeploy(appPath)
   }
 
   # figure out what kind of thing we're deploying
@@ -306,7 +332,7 @@ deployApp <- function(appDir = getwd(),
         bundleSize <- file.info(bundlePath)$size
 
         # Generate a hex-encoded md5 hash.
-        checkSum <- digest::digest(bundlePath, 'md5', file=TRUE)
+        checkSum <- md5sum(bundlePath)
         bundle <- client$createBundle(application$id, "application/x-tar", bundleSize, checkSum)
 
         if (verbose)
@@ -341,7 +367,7 @@ deployApp <- function(appDir = getwd(),
     # attempting the deployment itself to make retry easy on failure.
     if (verbose)
       timestampedLog("Saving deployment record for", target$appName, "-", target$username)
-    saveDeployment(appPath,
+    saveDeployment(recordDir,
                    target$appName,
                    target$appTitle,
                    target$username,
@@ -357,14 +383,16 @@ deployApp <- function(appDir = getwd(),
         ", from account", accountDetails$username)
   }
 
-  # wait for the deployment to complete (will raise an error if it can't)
-  displayStatus(paste0("Deploying bundle: ", bundle$id,
-                       " for ", assetTypeName, ": ", application$id,
-                       " ...\n", sep=""))
+  if (length(bundle$id) > 0 && nzchar(bundle$id)) {
+    displayStatus(paste0("Deploying bundle: ", bundle$id,
+                         " for ", assetTypeName, ": ", application$id,
+                         " ...\n", sep=""))
+  }
   if (verbose) {
     cat("----- Server deployment started at ", as.character(Sys.time()), " -----\n")
   }
 
+  # wait for the deployment to complete (will raise an error if it can't)
   task <- client$deployApplication(application$id, bundle$id)
   taskId <- if (is.null(task$task_id)) task$id else task$task_id
   response <- client$waitForTask(taskId, quiet)
@@ -385,6 +413,17 @@ deployApp <- function(appDir = getwd(),
 
   if (!quiet)
     openURL(client, application, launch.browser, deploymentSucceeded)
+
+  # invoke post-deploy hook if we have one
+  if (deploymentSucceeded) {
+    postDeploy <- getOption("rsconnect.post.deploy")
+    if (is.function(postDeploy)) {
+      if (verbose) {
+        cat("Invoking post-deploy hook rsconnect.post.deploy\n")
+      }
+      postDeploy(appPath)
+    }
+  }
 
   if (verbose) {
     cat("----- Deployment log finished at ", as.character(Sys.time()), " -----\n")
@@ -661,5 +700,25 @@ openURL <- function(client, application, launch.browser, deploymentSucceeded) {
     showURL(application$url)
   }
     # or open no url if things failed
+}
+
+runStartupScripts <- function(appDir, logLevel) {
+  scripts <- c(
+    # the site-wide startup script
+    file.path(R.home("etc"), "rsconnect.site"),
+    # the user startup script
+    path.expand("~/.rsconnect_profile"),
+    # a startup script specific to this application
+    file.path(appDir, ".rsconnect_profile"))
+
+  # iterate over the startup scripts
+  for (script in scripts) {
+    if (file.exists(script)) {
+      if (logLevel == "verbose") {
+        cat("----- Sourcing startup script", script, "-----\n")
+      }
+      source(file = script, verbose = (logLevel == "verbose"))
+    }
+  }
 }
 

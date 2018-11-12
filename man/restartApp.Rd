@@ -13,13 +13,16 @@ restartApp(appName, account = NULL, server = NULL, quiet = FALSE)
 then this parameter can be omitted.}
 
 \item{server}{Server name. Required only if you use the same account name on
-multiple servers (see \code{\link{servers}})}
+multiple servers (see \code{\link[=servers]{servers()}})}
 
 \item{quiet}{Request that no status information be printed to the console
 during the operation.}
 }
 \description{
 Restart an application currently running on a remote server.
+}
+\note{
+This function works only for ShinyApps servers.
 }
 \examples{
 \dontrun{
@@ -29,6 +32,6 @@ restartApp("myapp")
 }
 }
 \seealso{
-\code{\link{applications}}, \code{\link{deployApp}}, and
-  \code{\link{terminateApp}}
+\code{\link[=applications]{applications()}}, \code{\link[=deployApp]{deployApp()}}, and
+\code{\link[=terminateApp]{terminateApp()}}
 }

@@ -105,7 +105,10 @@ storeCookies <- function(requestURL, cookieHeaders){
 #   header name omitted.
 parseCookie <- function(requestURL, cookieHeader){
   keyval <- regmatches(cookieHeader, regexec(
-    "^(\\w+)\\s*=\\s*([^;]*)(;|$)", cookieHeader, ignore.case=TRUE))[[1]]
+    # https://curl.haxx.se/rfc/cookie_spec.html
+    # "characters excluding semi-colon, comma and white space"
+    # white space is not excluded from values so we can capture `expires`
+    "^([^;=, ]+)\\s*=\\s*([^;,]*)(;|$)", cookieHeader, ignore.case=TRUE))[[1]]
   if (length(keyval) == 0){
     # Invalid cookie format.
     warning("Unable to parse set-cookie header: ", cookieHeader)
@@ -220,21 +223,23 @@ parseHttpHeader <- function(header) {
 }
 
 parseHttpStatusCode <- function(statusLine) {
-  statusCode <- regexExtract("HTTP/[0-9]+\\.[0-9]+ ([0-9]+).*", statusLine)
+  # extract status code; needs to deal with HTTP/1.0, HTTP/1.1, and HTTP/2
+  statusCode <- regexExtract("HTTP/[0-9]+\\.?[0-9]* ([0-9]+).*", statusLine)
   if (is.null(statusCode))
     return (-1)
   else
     return (as.integer(statusCode))
 }
 
-# @param request a list containing protocol, host, port, method, and path fields
+# @param request A list containing protocol, host, port, method, and path fields
+# @param conn The connection to read the response from.
 readHttpResponse <- function(request, conn) {
   # read status code
   resp <- readLines(conn, 1)
   statusCode <- parseHttpStatusCode(resp[1])
 
   # read response headers
-  contentLength <- 0
+  contentLength <- NULL
   contentType <- NULL
   location <- NULL
   setCookies <- NULL
@@ -262,7 +267,14 @@ readHttpResponse <- function(request, conn) {
   storeCookies(request, setCookies)
 
   # read the response content
-  content <- rawToChar(readBin(conn, what = 'raw', n=contentLength))
+  if (is.null(contentLength)) {
+    # content length is unknown, so stream remaining text
+    content <- paste(readLines(con = conn), collapse = "\n")
+  } else {
+    # we know the content length, so read exactly that many bytes
+    content <- rawToChar(readBin(con = conn, what = "raw",
+                                 n = contentLength))
+  }
 
   # emit JSON trace if requested
   if (httpTraceJson() && identical(contentType, "application/json"))
@@ -353,11 +365,12 @@ httpInternal <- function(protocol,
 
     # read the response
     response <- readHttpResponse(list(
-                    protocol = protocol,
-                    host     = host,
-                    port     = port,
-                    method   = method,
-                    path     = path), conn)
+        protocol = protocol,
+        host     = host,
+        port     = port,
+        method   = method,
+        path     = path),
+      conn)
   })
   httpTrace(method, path, time)
 
@@ -465,11 +478,12 @@ httpCurl <- function(protocol,
     fileConn <- file(outputFile, "rb")
     on.exit(close(fileConn))
     readHttpResponse(list(
-                    protocol = protocol,
-                    host     = host,
-                    port     = port,
-                    method   = method,
-                    path     = path), fileConn)
+        protocol = protocol,
+        host     = host,
+        port     = port,
+        method   = method,
+        path     = path),
+      fileConn)
   } else {
     stop(paste("Curl request failed (curl error", result, "occurred)"))
   }
@@ -645,8 +659,24 @@ httpTrace <- function(method, path, time) {
   }
 }
 
+defaultHttpFunction <- function() {
+
+  # on Windows, prefer 'curl' if it's available on the PATH
+  # as 'RCurl' bundles a version of OpenSSL that's too old.
+  # note that newer versions of Windows 10 supply a 'curl' binary
+  # by default
+  if (identical(Sys.info()[["sysname"]], "Windows")) {
+    curl <- Sys.which("curl")
+    if (nzchar(curl))
+      return("curl")
+  }
+
+  # otherwise, default to RCurl for now (pending update to use httr)
+  "rcurl"
+}
+
 httpFunction <- function() {
-  httpType <- getOption("rsconnect.http", "rcurl")
+  httpType <- getOption("rsconnect.http", defaultHttpFunction())
   if (identical("rcurl", httpType))
     httpRCurl
   else if (identical("curl",  httpType))
@@ -671,7 +701,7 @@ POST_JSON <- function(service,
        path,
        query,
        "application/json",
-       content = RJSONIO::toJSON(json, pretty = TRUE, digits=30),
+       content = toJSON(json, pretty = TRUE, digits = 30),
        headers = headers)
 }
 
@@ -686,7 +716,7 @@ PUT_JSON <- function(service,
       path,
       query,
       "application/json",
-      content = RJSONIO::toJSON(json, pretty = TRUE, digits=30),
+      content = toJSON(json, pretty = TRUE, digits = 30),
       headers = headers)
 }
 
@@ -892,39 +922,39 @@ signatureHeaders <- function(authInfo, method, path, file) {
   if (!is.null(authInfo$secret)) {
     # generate contents hash
     if (!is.null(file))
-      md5 <- digest::digest(file, algo="md5", file=TRUE)
+      md5 <- md5sum(file)
     else
-      md5 <- digest::digest("", algo="md5", serialize=FALSE)
+      md5 <- openssl::md5("")
 
     # build canonical request
     canonicalRequest <- paste(method, path, date, md5, sep="\n")
 
     # sign request using shared secret
-    decodedSecret <- RCurl::base64Decode(authInfo$secret, mode="raw")
-    hmac <- digest::hmac(decodedSecret, canonicalRequest, algo="sha256")
-    signature <- paste(RCurl::base64Encode(hmac), "; version=1", sep="")
+    decodedSecret <- openssl::base64_decode(authInfo$secret)
+    hmac <- openssl::sha256(canonicalRequest, key = decodedSecret)
+    signature <- paste(openssl::base64_encode(hmac), "; version=1", sep="")
   } else if (!is.null(authInfo$private_key)) {
     # generate contents hash (this is done slightly differently for private key
     # auth since we use base64 throughout)
-    if (!is.null(file))
-      md5 <- digest::digest(file, algo="md5", file = TRUE, raw = TRUE)
+    if (!is.null(file)) {
+      con <- base::file(file, open = "rb")
+      on.exit(close(con), add = TRUE)
+      md5 <- openssl::md5(con)
+    }
     else
-      md5 <- digest::digest("", algo="md5", serialize = FALSE, raw = TRUE)
-    md5 <- RCurl::base64Encode(md5)
+      md5 <- openssl::md5(raw(0))
+    md5 <- openssl::base64_encode(md5)
 
     # build canonical request
     canonicalRequest <- paste(method, path, date, md5, sep="\n")
 
     # sign request using local private key
-    private_key <- structure(
-      RCurl::base64Decode(authInfo$private_key, mode="raw"),
-      class="private.key.DER")
-    private_key <- PKI::PKI.load.key(what = private_key, format = "DER",
-                                     private = TRUE)
-    hashed <- digest::digest(object = canonicalRequest, algo = "sha1",
-                             serialize = FALSE, raw = TRUE)
-    signature <- RCurl::base64Encode(
-      PKI::PKI.sign(key = private_key, digest = hashed))
+    private_key <- openssl::read_key(
+        openssl::base64_decode(authInfo$private_key), der = TRUE)
+
+    # OpenSSL defaults to sha1 hash function (which is what we need)
+    rawsig <- openssl::signature_create(charToRaw(canonicalRequest), key = private_key)
+    signature <- openssl::base64_encode(rawsig)
   } else {
     stop("can't sign request: no shared secret or private key")
   }
@@ -936,3 +966,4 @@ signatureHeaders <- function(authInfo, method, path, file) {
   headers$`X-Content-Checksum` <- md5
   headers
 }
+

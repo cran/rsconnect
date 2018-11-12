@@ -4,7 +4,8 @@
 \alias{rpubsUpload}
 \title{Upload a file to RPubs}
 \usage{
-rpubsUpload(title, contentFile, originalDoc, id = NULL, properties = list())
+rpubsUpload(title, contentFile, originalDoc, id = NULL,
+  properties = list())
 }
 \arguments{
 \item{title}{The title of the document.}
@@ -25,11 +26,11 @@ is reserved for future use).}
 }
 \value{
 A named list. If the upload was successful then the list contains a
-  \code{id} element that can be used to subsequently update the document as
-  well as a \code{continueUrl} element that provides a URL that a browser
-  should be opened to in order to complete publishing of the document. If the
-  upload fails then the list contains an \code{error} element which contains
-  an explanation of the error that occurred.
+\code{id} element that can be used to subsequently update the document as
+well as a \code{continueUrl} element that provides a URL that a browser
+should be opened to in order to complete publishing of the document. If the
+upload fails then the list contains an \code{error} element which contains
+an explanation of the error that occurred.
 }
 \description{
 This function publishes a file to rpubs.com. If the upload succeeds a

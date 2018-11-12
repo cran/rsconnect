@@ -8,6 +8,15 @@ timestampedLog <- function(...) {
   cat(paste(logTimestamper(), ..., "\n"))
 }
 
+# Returns a logging function when enabled, a noop function otherwise.
+verboseLogger <- function(verbose) {
+  if (verbose) {
+    timestampedLog
+  } else {
+    function(...) {}
+  }
+}
+
 isStringParam <- function(param) {
   is.character(param) && (length(param) == 1)
 }
@@ -100,11 +109,11 @@ file_path_sans_ext <- function(x, compression = FALSE) {
 
 #' Generate a line with embedded message
 #'
-#' Generates a message, surrounded with \code{#}, that extends
-#' up to length \code{n}.
+#' Generates a message, surrounded with `#`, that extends
+#' up to length `n`.
 #' @param message A string (single-line message).
 #' @param n The total number length of the generated string --
-#'   the message is padded with \code{#} up to length \code{n}.
+#'   the message is padded with `#` up to length `n`.
 #' @noRd
 hr <- function(message = "", n = 80) {
   if (nzchar(message)) {
@@ -198,4 +207,14 @@ activeEncoding <- function(project = getwd()) {
     return(defaultEncoding)
 
   sub("^Encoding:\\s*", "", encodingLine)
+}
+
+md5sum <- function(path) {
+  # open the file for reading in binary mode (to ensure we treat newlines
+  # literally when computing the md5)
+  con <- base::file(path, open = "rb")
+  on.exit(close(con), add = TRUE)
+
+  # compute md5 sum of contents and return as ordinary characters
+  unclass(as.character(openssl::md5(con)))
 }

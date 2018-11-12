@@ -4,9 +4,9 @@
 \alias{configureApp}
 \title{Configure an Application}
 \usage{
-configureApp(appName, appDir = getwd(), account = NULL, server = NULL,
-  redeploy = TRUE, size = NULL, instances = NULL, logLevel = c("normal",
-  "quiet", "verbose"))
+configureApp(appName, appDir = getwd(), account = NULL,
+  server = NULL, redeploy = TRUE, size = NULL, instances = NULL,
+  logLevel = c("normal", "quiet", "verbose"))
 }
 \arguments{
 \item{appName}{Name of application to configure}
@@ -18,7 +18,7 @@ current working directory.}
 system then this parameter can be omitted.}
 
 \item{server}{Server name. Required only if you use the same account name on
-multiple servers (see \code{\link{servers}})}
+multiple servers (see \code{\link[=servers]{servers()}})}
 
 \item{redeploy}{Re-deploy application after its been configured.}
 
@@ -26,13 +26,15 @@ multiple servers (see \code{\link{servers}})}
 
 \item{instances}{Configure number of application instances}
 
-\item{logLevel}{One of \code{"quiet"}, \code{"normal"} or \code{"verbose"};
-indicates how much logging to the console is to be performed. At
-\code{"quiet"} reports no information; at \code{"verbose"}, a full
-diagnostic log is captured.}
+\item{logLevel}{One of \code{"quiet"}, \code{"normal"} or \code{"verbose"}; indicates how
+much logging to the console is to be performed. At \code{"quiet"} reports no
+information; at \code{"verbose"}, a full diagnostic log is captured.}
 }
 \description{
 Configure an application running on a remote server.
+}
+\note{
+This function works only for ShinyApps servers.
 }
 \examples{
 \dontrun{
@@ -42,5 +44,5 @@ configureApp("myapp", size="xlarge")
 }
 }
 \seealso{
-\code{\link{applications}}, \code{\link{deployApp}}
+\code{\link[=applications]{applications()}}, \code{\link[=deployApp]{deployApp()}}
 }

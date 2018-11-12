@@ -27,9 +27,9 @@ lucidClient <- function(service, authInfo) {
         query$application=applicationId
       if (!is.null(from))
         query$from = from
-      if (is.null(until))
+      if (!is.null(until))
         query$until = until
-      if (is.null(interval))
+      if (!is.null(interval))
         query$interval = interval
       handleResponse(GET(service, authInfo, path, queryString(query)))
     },
@@ -75,9 +75,9 @@ lucidClient <- function(service, authInfo) {
       m <- paste(lapply(metrics, function(x){paste("metric", urlEncode(x), sep="=")}), collapse = "&")
       if (!is.null(from))
         query$from = from
-      if (is.null(until))
+      if (!is.null(until))
         query$until = until
-      if (is.null(interval))
+      if (!is.null(interval))
         query$interval = interval
       handleResponse(GET(service, authInfo, path, paste(m, queryString(query), sep="&")))
     },
@@ -134,7 +134,10 @@ lucidClient <- function(service, authInfo) {
     deployApplication = function(applicationId, bundleId=NULL) {
       path <- paste("/applications/", applicationId, "/deploy", sep="")
       json <- list()
-      json$bundle <- as.numeric(bundleId)
+      if (length(bundleId) > 0 && nzchar(bundleId))
+        json$bundle <- as.numeric(bundleId)
+      else
+        json$rebuild = FALSE
       handleResponse(POST_JSON(service, authInfo, path, json))
     },
 

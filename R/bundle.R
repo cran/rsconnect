@@ -123,15 +123,15 @@ maxDirectoryList <- function(dir, parent, totalSize) {
 #' @param appDir Directory containing the application.
 #'
 #' @details This function computes results similar to a recursive directory
-#' listing from \code{\link{list.files}}, with the following constraints:
+#' listing from [list.files()], with the following constraints:
 #'
 #' \enumerate{
 #' \item{If the total size of the files exceeds the maximum bundle size, no
 #'    more files are listed. The maximum bundle size is controlled by the
-#'    \code{rsconnect.max.bundle.size} option.}
+#'    `rsconnect.max.bundle.size` option.}
 #' \item{If the total size number of files exceeds the maximum number to be
 #'    bundled, no more files are listed. The maximum number of files in the
-#'    bundle is controlled by the \code{rsconnect.max.bundle.files} option.}
+#'    bundle is controlled by the `rsconnect.max.bundle.files` option.}
 #' \item{Certain files and folders that don't need to be bundled, such as
 #'    those containing internal version control and RStudio state, are
 #'    excluded.}
@@ -140,8 +140,8 @@ maxDirectoryList <- function(dir, parent, totalSize) {
 #' @return Returns a list containing the following elements:
 #'
 #' \tabular{ll}{
-#' \code{contents} \tab A list of the files to be bundled \cr
-#' \code{totalSize} \tab The total size of the files \cr
+#' `contents` \tab A list of the files to be bundled \cr
+#' `totalSize` \tab The total size of the files \cr
 #' }
 #'
 #' @export
@@ -152,12 +152,12 @@ listBundleFiles <- function(appDir) {
 bundleFiles <- function(appDir) {
   files <- listBundleFiles(appDir)
   if (files$totalSize > getOption("rsconnect.max.bundle.size")) {
-    stop("The directory", appDir, "cannot be deployed because it is too ",
-         "large (the maximum size is", getOption("rsconnect.max.bundle.size"),
-         "bytes). Remove some files or adjust the rsconnect.max.bundle.size ",
+    stop("The directory ", appDir, " cannot be deployed because it is too ",
+         "large (the maximum size is ", getOption("rsconnect.max.bundle.size"),
+         " bytes). Remove some files or adjust the rsconnect.max.bundle.size ",
          "option.")
   } else if (length(files$contents) > getOption("rsconnect.max.bundle.files")) {
-    stop("The directory", appDir, "cannot be deployed because it contains ",
+    stop("The directory ", appDir, " cannot be deployed because it contains ",
          "too many files (the maximum number of files is ",
          getOption("rsconnect.max.bundle.files"), "). Remove some files or ",
          "adjust the rsconnect.max.bundle.files option.")
@@ -168,18 +168,22 @@ bundleFiles <- function(appDir) {
 
 bundleApp <- function(appName, appDir, appFiles, appPrimaryDoc, assetTypeName,
                       contentCategory, verbose = FALSE) {
-  if (verbose)
-    timestampedLog("Inferring App mode and parameters")
+  logger <- verboseLogger(verbose)
 
-  # infer the mode of the application from its layout
-  # unless we're an API, in which case, we're API mode.
-  appMode <- inferAppMode(appDir, appPrimaryDoc, appFiles)
-  hasParameters <- appHasParameters(appDir, appFiles, appMode, contentCategory)
-
-  if (verbose)
-    timestampedLog("Bundling app dir")
-  # copy files to bundle dir to stage
-  bundleDir <- bundleAppDir(appDir, appFiles, appPrimaryDoc)
+  logger("Inferring App mode and parameters")
+  appMode <- inferAppMode(
+      appDir = appDir,
+      appPrimaryDoc = appPrimaryDoc,
+      files = appFiles)
+  appPrimaryDoc <- inferAppPrimaryDoc(
+      appPrimaryDoc = appPrimaryDoc,
+      appFiles = appFiles,
+      appMode = appMode)
+  hasParameters <- appHasParameters(
+      appDir = appDir,
+      appPrimaryDoc = appPrimaryDoc,
+      appMode = appMode,
+      contentCategory = contentCategory)
 
   # get application users (for non-document deployments)
   users <- NULL
@@ -187,30 +191,109 @@ bundleApp <- function(appName, appDir, appFiles, appPrimaryDoc, assetTypeName,
     users <- suppressWarnings(authorizedUsers(appDir))
   }
 
-  if (verbose)
-    timestampedLog("Generate manifest.json")
+  # copy files to bundle dir to stage
+  logger("Bundling app dir")
+  bundleDir <- bundleAppDir(
+      appDir = appDir,
+      appFiles = appFiles,
+      appPrimaryDoc = appPrimaryDoc)
+  on.exit(unlink(bundleDir, recursive = TRUE), add = TRUE)
+
   # generate the manifest and write it into the bundle dir
-  manifestJson <- enc2utf8(createAppManifest(bundleDir, appMode,
-                                             contentCategory, hasParameters,
-                                             appPrimaryDoc,
-                                             assetTypeName, users))
-  writeLines(manifestJson, file.path(bundleDir, "manifest.json"),
-             useBytes = TRUE)
+  logger("Generate manifest.json")
+  manifest <- createAppManifest(
+      appDir = bundleDir,
+      appMode = appMode,
+      contentCategory = contentCategory,
+      hasParameters = hasParameters,
+      appPrimaryDoc = appPrimaryDoc,
+      assetTypeName = assetTypeName,
+      users = users)
+  manifestJson <- enc2utf8(toJSON(manifest, pretty = TRUE))
+  manifestPath <- file.path(bundleDir, "manifest.json")
+  writeLines(manifestJson, manifestPath, useBytes = TRUE)
 
-  if (verbose)
-    timestampedLog("Writing Rmd index if necessary")
   # if necessary write an index.htm for shinydoc deployments
+  logger("Writing Rmd index if necessary")
   indexFiles <- writeRmdIndex(appName, bundleDir)
-  on.exit(unlink(indexFiles), add = TRUE)
 
-  if (verbose)
-    timestampedLog("Compressing the bundle")
   # create the bundle and return its path
+  logger("Compressing the bundle")
   prevDir <- setwd(bundleDir)
+
   on.exit(setwd(prevDir), add = TRUE)
   bundlePath <- tempfile("rsconnect-bundle", fileext = ".tar.gz")
   utils::tar(bundlePath, files = ".", compression = "gzip", tar = "internal")
   bundlePath
+}
+
+#' Create a manifest.json describing deployment requirements.
+#'
+#' Given a directory content targeted for deployment, write a manifest.json
+#' into that directory describing the deployment requirements for that
+#' content.
+#'
+#' @param appDir Directory containing the content (Shiny application, R
+#'   Markdown document, etc).
+#'
+#' @param appFiles Optional. The full set of files and directories to be
+#'   included in future deployments of this content. Used when computing
+#'   dependency requirements. When `NULL`, all files in `appDir` are
+#'   considered.
+#'
+#' @param appPrimaryDoc Optional. Specifies the primary document in a content
+#'   directory containing more than one. If `NULL`, the primary document is
+#'   inferred from the file list.
+#'
+#' @param contentCategory Optional. Specifies the kind of content being
+#'   deployed (e.g. `"plot"` or `"site"`).
+#'
+#' @export
+writeManifest <- function(appDir = getwd(),
+                          appFiles = NULL,
+                          appPrimaryDoc = NULL,
+                          contentCategory = NULL) {
+  if (is.null(appFiles)) {
+    appFiles <- bundleFiles(appDir)
+  } else {
+    appFiles <- explodeFiles(appDir, appFiles)
+  }
+
+  appMode <- inferAppMode(
+      appDir = appDir,
+      appPrimaryDoc = appPrimaryDoc,
+      files = appFiles)
+  appPrimaryDoc <- inferAppPrimaryDoc(
+      appPrimaryDoc = appPrimaryDoc,
+      appFiles = appFiles,
+      appMode = appMode)
+  hasParameters <- appHasParameters(
+      appDir = appDir,
+      appPrimaryDoc = appPrimaryDoc,
+      appMode = appMode,
+      contentCategory = contentCategory)
+
+  # copy files to bundle dir to stage
+  bundleDir <- bundleAppDir(
+      appDir = appDir,
+      appFiles = appFiles,
+      appPrimaryDoc = appPrimaryDoc)
+  on.exit(unlink(bundleDir, recursive = TRUE), add = TRUE)
+
+  # generate the manifest and write it into the bundle dir
+  manifest <- createAppManifest(
+      appDir = bundleDir,
+      appMode = appMode,
+      contentCategory = contentCategory,
+      hasParameters = hasParameters,
+      appPrimaryDoc = appPrimaryDoc,
+      assetTypeName = "content",
+      users = NULL)
+  manifestJson <- enc2utf8(toJSON(manifest, pretty = TRUE))
+  manifestPath <- file.path(appDir, "manifest.json")
+  writeLines(manifestJson, manifestPath, useBytes = TRUE)
+
+  invisible()
 }
 
 yamlFromRmd <- function(filename) {
@@ -234,7 +317,7 @@ yamlFromRmd <- function(filename) {
   return(NULL)
 }
 
-appHasParameters <- function(appDir, files, appMode, contentCategory) {
+appHasParameters <- function(appDir, appPrimaryDoc, appMode, contentCategory) {
   # Only Rmd deployments are marked as having parameters. Shiny applications
   # may distribute an Rmd alongside app.R, but that does not cause the
   # deployment to be considered parameterized.
@@ -248,17 +331,14 @@ appHasParameters <- function(appDir, files, appMode, contentCategory) {
     return(FALSE)
   }
 
-  rmdFiles <- grep("^[^/\\\\]+\\.rmd$", files, ignore.case = TRUE, perl = TRUE,
-                   value = TRUE)
-  if (length(rmdFiles) > 0) {
-    for (rmdFile in rmdFiles) {
-      filename <- file.path(appDir, rmdFile)
-      yaml <- yamlFromRmd(filename)
-      if (!is.null(yaml)) {
-        params <- yaml[["params"]]
-        # We don't care about deep parameter processing, only that they exist.
-        return(!is.null(params) && length(params) > 0)
-      }
+  # Only Rmd files have parameters.
+  if (tolower(tools::file_ext(appPrimaryDoc)) == "rmd") {
+    filename <- file.path(appDir, appPrimaryDoc)
+    yaml <- yamlFromRmd(filename)
+    if (!is.null(yaml)) {
+      params <- yaml[["params"]]
+      # We don't care about deep parameter processing, only that they exist.
+      return(!is.null(params) && length(params) > 0)
     }
   }
   FALSE
@@ -276,6 +356,8 @@ isShinyRmd <- function(filename) {
   return(FALSE)
 }
 
+# infer the mode of the application from its layout
+# unless we're an API, in which case, we're API mode.
 inferAppMode <- function(appDir, appPrimaryDoc, files) {
   # plumber API
   plumberFiles <- grep("^(plumber|entrypoint).r$", files, ignore.case = TRUE, perl = TRUE)
@@ -324,6 +406,33 @@ inferAppMode <- function(appDir, appPrimaryDoc, files) {
   return(NA)
 }
 
+inferAppPrimaryDoc <- function(appPrimaryDoc, appFiles, appMode) {
+  # if deploying an R Markdown app or static content, infer a primary document
+  # if not already specified
+  if ((grepl("rmd", appMode, fixed = TRUE) || appMode == "static")
+      && is.null(appPrimaryDoc)) {
+    # determine expected primary document extension
+    ext <- ifelse(appMode == "static", "html?", "Rmd")
+
+    # use index file if it exists
+    primary <- which(grepl(paste0("^index\\.", ext, "$"), appFiles, fixed = FALSE,
+                           ignore.case = TRUE))
+    if (length(primary) == 0) {
+      # no index file found, so pick the first one we find
+      primary <- which(grepl(paste0("^.*\\.", ext, "$"), appFiles, fixed = FALSE,
+                             ignore.case = TRUE))
+      if (length(primary) == 0) {
+        stop("Application mode ", appMode, " requires at least one document.")
+      }
+    }
+    # if we have multiple matches, pick the first
+    if (length(primary) > 1)
+      primary <- primary[[1]]
+    appPrimaryDoc <- appFiles[[primary]]
+  }
+  appPrimaryDoc
+}
+
 ## check for extra dependencies congruent to application mode
 inferDependencies <- function(appMode, hasParameters) {
   deps <- c()
@@ -368,9 +477,11 @@ createAppManifest <- function(appDir, appMode, contentCategory, hasParameters,
       # include github package info
       info <- c(info, as.list(deps[i, grep('Github', colnames(deps), perl = TRUE, value = TRUE)]))
 
-      # get package description
+      # get package description; note that we need to remove the
+      # packageDescription S3 class from the object or jsonlite will refuse to
+      # serialize it when building the manifest JSON
       # TODO: should we get description from packrat/desc folder?
-      info$description = suppressWarnings(utils::packageDescription(name))
+      info$description = suppressWarnings(unclass(utils::packageDescription(name)))
 
       # if description is NA, application dependency may not be installed
       if (is.na(info$description[1])) {
@@ -396,33 +507,8 @@ createAppManifest <- function(appDir, appMode, contentCategory, hasParameters,
   # provide checksums for all files
   filelist <- list()
   for (file in files) {
-    checksum <- list(checksum = digest::digest(file.path(appDir, file),
-                                               algo = "md5", file = TRUE))
+    checksum <- list(checksum = md5sum(file.path(appDir, file)))
     filelist[[file]] <- I(checksum)
-  }
-
-  # if deploying an R Markdown app or static content, infer a primary document
-  # if not already specified
-  if ((grepl("rmd", appMode, fixed = TRUE) || appMode == "static")
-      && is.null(appPrimaryDoc)) {
-    # determine expected primary document extension
-    ext <- ifelse(appMode == "static", "html?", "Rmd")
-
-    # use index file if it exists
-    primary <- which(grepl(paste0("^index\\.", ext, "$"), files, fixed = FALSE,
-                           ignore.case = TRUE))
-    if (length(primary) == 0) {
-      # no index file found, so pick the first one we find
-      primary <- which(grepl(paste0("^.*\\.", ext, "$"), files, fixed = FALSE,
-                             ignore.case = TRUE))
-      if (length(primary) == 0) {
-        stop("Application mode ", appMode, " requires at least one document.")
-      }
-    }
-    # if we have multiple matches, pick the first
-    if (length(primary) > 1)
-      primary <- primary[[1]]
-    appPrimaryDoc <- files[[primary]]
   }
 
   # create userlist
@@ -478,9 +564,7 @@ createAppManifest <- function(appDir, appMode, contentCategory, hasParameters,
   } else {
     manifest$users <- NA
   }
-
-  # return it as json
-  RJSONIO::toJSON(manifest, pretty = TRUE)
+  manifest
 }
 
 validatePackageSource <- function(pkg) {
@@ -626,18 +710,23 @@ performPackratSnapshot <- function(bundleDir) {
   on.exit(packrat::opts$snapshot.recommended.packages(srp, persist = FALSE),
           add = TRUE)
 
-  # attempt to eagerly load the BiocInstaller package if installed, to work
-  # around an issue where attempts to load the package could fail within a
-  # 'suppressMessages()' context
-  if (length(find.package("BiocInstaller", quiet = TRUE)))
-    requireNamespace("BiocInstaller", quietly = TRUE)
+  # attempt to eagerly load the BiocInstaller or BiocManaager package if installed, to work around
+  # an issue where attempts to load the package could fail within a 'suppressMessages()' context
+  packages <- c("BiocManager", "BiocInstaller")
+  for (package in packages) {
+    if (length(find.package(package, quiet = TRUE))) {
+      requireNamespace(package, quietly = TRUE)
+      break
+    }
+  }
 
   # generate a snapshot
   suppressMessages(
     packrat::.snapshotImpl(project = bundleDir,
                            snapshot.sources = FALSE,
                            fallback.ok = TRUE,
-                           verbose = FALSE)
+                           verbose = FALSE,
+                           implicit.packrat.dependency = FALSE)
   )
 
   # TRUE just to indicate success

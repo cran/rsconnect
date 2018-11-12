@@ -1,5 +1,4 @@
 
-
 saveDeployment <- function(appPath, name, title, username, account, server,
                            hostUrl, appId, bundleId, url, metadata) {
 
@@ -49,23 +48,23 @@ saveDeployment <- function(appPath, name, title, username, account, server,
 #'   (optional)
 #' @param serverFilter Return only deployments matching the given server
 #'   (optional)
-#' @param excludeOrphaned If \code{TRUE} (the default), return only deployments
+#' @param excludeOrphaned If `TRUE` (the default), return only deployments
 #'   made by a currently registered account. Deployments made from accounts that
-#'   are no longer registered (via e.g.\code{\link{removeAccount}}) will not be
+#'   are no longer registered (via e.g.[removeAccount()]) will not be
 #'   returned.
 #' @return
 #' Returns a data frame with at least following columns:
 #' \tabular{ll}{
-#' \code{name} \tab Name of deployed application\cr
-#' \code{account} \tab Account owning deployed application\cr
-#' \code{bundleId} \tab Identifier of deployed application's bundle\cr
-#' \code{url} \tab URL of deployed application\cr
-#' \code{when} \tab When the application was deployed (in seconds since the
+#' `name` \tab Name of deployed application\cr
+#' `account` \tab Account owning deployed application\cr
+#' `bundleId` \tab Identifier of deployed application's bundle\cr
+#' `url` \tab URL of deployed application\cr
+#' `when` \tab When the application was deployed (in seconds since the
 #'   epoch)\cr
 #' }
 #'
 #' If additional metadata has been saved with the deployment record using the
-#' \code{metadata} argument to \code{\link{deployApp}}, the frame will include
+#' `metadata` argument to [deployApp()], the frame will include
 #' additional columns.
 #'
 #' @examples
@@ -75,8 +74,8 @@ saveDeployment <- function(appPath, name, title, username, account, server,
 #' # account
 #' deployments("~/r/myapp", accountFilter="abc")
 #' }
-#' @seealso \code{\link{applications}} to get a list of deployments from the
-#'   server, and \code{\link{deployApp}} to create a new deployment.
+#' @seealso [applications()] to get a list of deployments from the
+#'   server, and [deployApp()] to create a new deployment.
 #' @export
 deployments <- function(appPath, nameFilter = NULL, accountFilter = NULL,
                         serverFilter = NULL, excludeOrphaned = TRUE) {
@@ -228,7 +227,7 @@ deploymentRecord <- function(name, title, username, account, server, hostUrl,
            server = server,
            hostUrl = hostUrl,
            appId = appId,
-           bundleId = bundleId,
+           bundleId = if (is.null(bundleId)) "" else bundleId,
            url = url,
            when = when),
       metadata),
@@ -259,6 +258,76 @@ addToDeploymentHistory <- function(appPath, deploymentRecord) {
 
   # overwrite with new history
   file.rename(newHistory, history)
+}
+
+#' Forget Application Deployment
+#'
+#' Forgets about an application deployment. This is useful if the application
+#' has been deleted on the server, or the local deployment information needs to
+#' be reset.
+#'
+#' @param appPath The path to the content that was deployed, either a directory
+#'   or an individual document.
+#' @param name The name of the content that was deployed (optional)
+#' @param account The name of the account to which the content was deployed
+#'   (optional)
+#' @param server The name of the server to which the content was deployed
+#'   (optional)
+#' @param dryRun Set to TRUE to preview the files/directories to be removed
+#'   instead of actually removing them. Defaults to FALSE.
+#' @param force Set to TRUE to remove files and directories without prompting.
+#'   Defaults to FALSE in interactive sessions.
+#' @return NULL, invisibly.
+#'
+#' @details This method removes from disk the file containing deployment
+#'   metadata. If "name", "account", and "server" are all NULL, then all of the
+#'   deployments for the application are forgotten; otherwise, only the
+#'   specified deployment is forgotten.
+#'
+#' @export
+forgetDeployment <- function(appPath = getwd(), name = NULL,
+                             account = NULL, server = NULL,
+                             dryRun = FALSE, force = !interactive()) {
+  if (is.null(name) && is.null(account) && is.null(server)) {
+    dcfDir <- rsconnectRootPath(appPath)
+    if (dryRun)
+      message("Would remove the directory ", dcfDir)
+    else if (file.exists(dcfDir)) {
+      if (!force) {
+        prompt <- paste("Forget all deployment records for ", appPath, "? [Y/n] ", sep="")
+        input <- readline(prompt)
+        if (nzchar(input) && !identical(input, "y") && !identical(input, "Y"))
+          stop("No deployment records removed.", call. = FALSE)
+      }
+      unlink(dcfDir, recursive = TRUE)
+    } else {
+      message("No deployments found for the application at ", appPath)
+    }
+  } else {
+    if (is.null(name) || is.null(account) || is.null(server)) {
+      stop("Invalid argument. ",
+           "Supply the name, account, and server of the deployment record to delete. ",
+           "Supply NULL for all three to delete all deployment records.")
+    }
+    dcf <- deploymentFile(appPath, name, account, server)
+    if (dryRun)
+      message("Would remove the file ", dcf)
+    else if (file.exists(dcf)) {
+      if (!force) {
+        prompt <- paste("Forget deployment of ", appPath, " to '", name, "' on ",
+                        server, "? [Y/n] ", sep="")
+        input <- readline(prompt)
+        if (nzchar(input) && !identical(input, "y") && !identical(input, "Y"))
+          stop("Cancelled. No deployment records removed.", call. = FALSE)
+      }
+      unlink(dcf)
+    } else {
+      message("No deployment of ", appPath, " to '", name, "' on ", server,
+              " found.")
+    }
+  }
+
+  invisible(NULL)
 }
 
 

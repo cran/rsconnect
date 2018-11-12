@@ -10,7 +10,7 @@
 #' @param account Account name. If a single account is registered on the
 #'   system then this parameter can be omitted.
 #' @param server Server name. Required only if you use the same account name on
-#'   multiple servers (see \code{\link{servers}})
+#'   multiple servers (see [servers()])
 #' @param redeploy Re-deploy application after its been configured.
 #' @param size Configure application instance size
 #' @param instances Configure number of application instances
@@ -20,7 +20,8 @@
 #' # set instance size for an application
 #' configureApp("myapp", size="xlarge")
 #' }
-#' @seealso \code{\link{applications}}, \code{\link{deployApp}}
+#' @seealso [applications()], [deployApp()]
+#' @note This function works only for ShinyApps servers.
 #' @export
 configureApp <- function(appName, appDir=getwd(), account = NULL, server = NULL,
                          redeploy = TRUE, size = NULL,
@@ -46,16 +47,18 @@ configureApp <- function(appName, appDir=getwd(), account = NULL, server = NULL,
 
   # set application properties
   serverDetails <- serverInfo(accountDetails$server)
-  lucid <- lucidClient(serverDetails$url, accountDetails)
-
   client <- clientForAccount(accountDetails)
   for (i in names(properties)) {
     propertyName <- i
     propertyValue <- properties[[i]]
-    if (identical(client, lucid))
-      lucid$setApplicationProperty(application$id, propertyName, propertyValue)
-    else
+
+    # dispatch to the appropriate client implementation
+    if (is.function(client$configureApplication))
       client$configureApplication(application$id, propertyName, propertyValue)
+    else if (is.function(client$setApplicationProperty))
+      client$setApplicationProperty(application$id, propertyName, propertyValue)
+    else
+      stop("Server ", accountDetails$server, " has no appropriate configuration method.")
   }
 
   # redeploy application if requested
