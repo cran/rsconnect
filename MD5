@@ -1,9 +1,9 @@
-b7f8f5e5391eee8c953e08c2047211e0 *DESCRIPTION
+c04041ca5c8ee9276dc01b38d0e7fd01 *DESCRIPTION
 ff8502e41fbef2213433fb97ba754d0c *NAMESPACE
-4761a22482d11824f4a395f25ab3701e *R/accounts.R
+693803d3edf7f19ea372ca97c392e962 *R/accounts.R
 35ae515bb0474ef6836e6286f7c28ee2 *R/applications.R
 a1aaeca4d7fcf15edfbbc947551f8327 *R/auth.R
-8f38ab59fabd27c944c853fc5fffc4fc *R/bundle.R
+e22200a377329dd1404c044af06f7b43 *R/bundle.R
 8564d685931adf9c1ea44e0311fc4592 *R/certificates.R
 8543573f8d3cc329a2e2be7798b4b31e *R/client.R
 ccf610ca13f5a95e85878b68b58fb49b *R/config.R
@@ -16,7 +16,7 @@ cf3187801a3d676f9b85a46f4c81bf19 *R/deployApp.R
 9d4b8474055fcb5f990d696a96634b45 *R/deploySite.R
 9025e64e76db33e202480af6817f14df *R/deployTFModel.R
 24f21df71885b01500efd6509f25662d *R/deployments.R
-c3d5fd3dd4e16d4bbc5949b08f6936fd *R/http.R
+be6b1ccb756572eb72bb80a4cc30b7a9 *R/http.R
 65ec80ffda290b6b627fa9e0c1bc47a8 *R/ide.R
 0ecdadec7963772e91df8e3b42f50f09 *R/imports.R
 9d5cff4065ea9758a72bdc44a3086e02 *R/json.R
@@ -68,7 +68,7 @@ ad03a8ca78e730ebc791fcdaa4445edf *man/deploySite.Rd
 73c3fcf9bed2e25139d1dbd178eecc05 *man/linter.Rd
 3b791447f87478863bcb4db77782737d *man/listBundleFiles.Rd
 145f6299d0d23a5bfe5c4d0065356802 *man/makeLinterMessage.Rd
-7afbf415ada829b04f80ce971baf78c8 *man/options.Rd
+eec779950aeab83fc42b2425fb9d2e30 *man/options.Rd
 2c83085d5a49831fe110d4e239771caa *man/removeAuthorizedUser.Rd
 53ecaecb030968be567a5338330e3fe2 *man/restartApp.Rd
 c534ae9aafea85af18d13208f8a17e53 *man/rpubsUpload.Rd
