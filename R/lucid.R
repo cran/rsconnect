@@ -82,12 +82,10 @@ lucidClient <- function(service, authInfo) {
       handleResponse(GET(service, authInfo, path, paste(m, queryString(query), sep="&")))
     },
 
-    getLogs = function(applicationId, entries = 50, streaming = FALSE,
-                       writer = NULL) {
-      path <- paste("/applications/", applicationId, "/logs", sep="")
-      query <- paste("count=", entries,
-                     "&tail=", if (streaming) "1" else "0", sep="")
-      handleResponse(GET(service, authInfo, path, query, writer = writer))
+    getLogs = function(applicationId, entries = 50) {
+      path <- paste0("/applications/", applicationId, "/logs")
+      query <- paste0("count=", entries, "&tail=0")
+      handleResponse(GET(service, authInfo, path, query))
     },
 
     createApplication = function(name, title, template, accountId) {
@@ -143,7 +141,12 @@ lucidClient <- function(service, authInfo) {
 
     terminateApplication = function(applicationId) {
       path <- paste("/applications/", applicationId, "/terminate", sep="")
-      handleResponse(POST_JSON(service, authInfo, path, list()))
+      handleResponse(POST(service, authInfo, path))
+    },
+
+    purgeApplication = function(applicationId) {
+      path <- paste("/applications/", applicationId, "/purge", sep="")
+      handleResponse(POST(service, authInfo, path))
     },
 
     inviteApplicationUser = function(applicationId, email,

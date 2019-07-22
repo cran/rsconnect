@@ -111,9 +111,9 @@ rpubsUpload <- function(title,
     method <- "PUT"
   }
 
-  # use https if using RCurl, and vanilla HTTP otherwise
+  # use https if using a curl R package, and vanilla HTTP otherwise
   http <- httpFunction()
-  if (identical(http, httpRCurl)) {
+  if (identical(http, httpRCurl) || identical(http, httpLibCurl)) {
     protocol <- "https"
     port <- 443
   } else {
@@ -122,8 +122,14 @@ rpubsUpload <- function(title,
   }
 
   # send the request
-  result <- http(protocol, "api.rpubs.com", port, method, path, headers,
-                 "application/x-compressed", file = packageFile)
+  result <- http(protocol = protocol,
+                 host = "api.rpubs.com",
+                 port = port,
+                 method = method,
+                 path = path,
+                 headers = headers,
+                 contentType = "application/x-compressed",
+                 contentFile = packageFile)
 
   # check for success
   succeeded <- FALSE
