@@ -76,7 +76,7 @@ snapshotDependencies <- function(appDir, implicit_dependencies=c()) {
   # get Bioconductor repos if any
   biocRepos = repos[grep('BioC', names(repos), perl=TRUE, value=TRUE)]
   if (length(biocRepos) > 0) {
-    biocPackages = available.packages(contriburl=contrib.url(biocRepos, type="source"))
+    biocPackages = available.packages(contriburl = contrib.url(biocRepos, type = "source"), type = "source")
   } else {
     biocPackages = c()
   }
@@ -85,7 +85,7 @@ snapshotDependencies <- function(appDir, implicit_dependencies=c()) {
   repo.lookup <- data.frame(
     name = names(named.repos),
     url = as.character(named.repos),
-    contrib.url = contrib.url(named.repos),
+    contrib.url = contrib.url(named.repos, type = "source"),
     stringsAsFactors = FALSE)
 
   # get packages records defined in the lockfile
@@ -109,7 +109,7 @@ snapshotDependencies <- function(appDir, implicit_dependencies=c()) {
       # Find this package in the set of available packages then use its
       # contrib.url to map back to the configured repositories.
       package.contrib <- repo.packages[pkg, 'Repository']
-      package.repo <- repo.lookup[repo.lookup$contrib.url == package.contrib,]
+      package.repo <- repo.lookup[repo.lookup$contrib.url == package.contrib, ][1, ]
       # If the incoming package comes from CRAN, keep the CRAN name in place
       # even if that means using a different name than the repos list.
       #

@@ -65,10 +65,21 @@ test_that("The linter believes that the Shiny example apps are okay", {
         })
       })
     })
-
   }
+})
 
+test_that("The linter identifies browser() statements correctly", {
+  result <- lint("shinyapp-with-browser")
+  server.R <- result[["server.R"]]
+  browseLines <- server.R[["browser"]]
+  expect_true(browseLines$indices == 9)
+})
 
+test_that("The linter identifies browseURL() statements correctly", {
+  result <- lint("shinyapp-with-browser")
+  server.R <- result[["server.R"]]
+  browseLines <- server.R[["browseURL"]]
+  expect_true(browseLines$indices == 5)
 })
 
 test_that("The linter accepts a plumber API", {
@@ -81,4 +92,9 @@ test_that("The linter accepts a TensorFlow Saved Model", {
   lint("tf-human-readable-saved-model")
   lint("tf-saved-model-rootdir")
   expect_true(TRUE) # didn't stop()
+})
+
+test_that("Linters can run on files with multibyte characters", {
+  lint("multibyte-characters")
+  expect_true(TRUE) # didn't stop
 })

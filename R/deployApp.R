@@ -38,12 +38,16 @@
 #'   multiple servers.
 #' @param upload If `TRUE` (the default) then the application is uploaded from
 #'   the local system prior to deployment. If `FALSE` then it is re-deployed
-#'   using the last version that was uploaded.
+#'   using the last version that was uploaded. `FALSE` is only supported on
+#'   shinyapps.io; `TRUE` is required on RStudio Connect.
 #' @param recordDir Directory where publish record is written. Can be `NULL`
 #'   in which case record will be written to the location specified with `appDir`.
 #' @param launch.browser If true, the system's default web browser will be
 #'   launched automatically after the app is started. Defaults to `TRUE` in
-#'   interactive sessions only.
+#'   interactive sessions only. If a function is passed, it will be called
+#'   after the app is started, with the app URL as a paramter.
+#' @param on.failure Function to be called if the deployment fails. If a
+#'   deployment log URL is available, it's passed as a parameter.
 #' @param logLevel One of `"quiet"`, `"normal"` or `"verbose"`; indicates how
 #'   much logging to the console is to be performed. At `"quiet"` reports no
 #'   information; at `"verbose"`, a full diagnostic log is captured.
@@ -57,8 +61,9 @@
 #'   `getOption("rsconnect.force.update.apps", FALSE)`.
 #' @param python Full path to a python binary for use by `reticulate`.
 #'   Required if `reticulate` is a dependency of the app being deployed.
-#'   The specified python binary will be invoked to determine its version
-#'   and to list the python packages installed in the environment.
+#'   If python = NULL, and RETICULATE_PYTHON is set in the environment, its
+#'   value will be used. The specified python binary will be invoked to determine
+#'   its version and to list the python packages installed in the environment.
 #' @examples
 #' \dontrun{
 #'
@@ -103,7 +108,8 @@ deployApp <- function(appDir = getwd(),
                       lint = TRUE,
                       metadata = list(),
                       forceUpdate = getOption("rsconnect.force.update.apps", FALSE),
-                      python = NULL) {
+                      python = NULL,
+                      on.failure = NULL) {
 
   if (!isStringParam(appDir))
     stop(stringParamErrorMessage("appDir"))
@@ -303,8 +309,24 @@ deployApp <- function(appDir = getwd(),
   # determine the deployment target and target account info
   target <- deploymentTarget(appPath, appName, appTitle, appId, account, server)
   accountDetails <- accountInfo(target$account, target$server)
-  client <- clientForAccount(accountDetails)
 
+  # test for compatibility between account type and publish intent
+  if (isShinyapps(accountDetails)) {
+    # ensure we aren't trying to publish an API to shinyapps.io; this will not
+    # currently end well
+    if (identical(contentCategory, "api")) {
+      stop("Plumber APIs are not currently supported on shinyapps.io; they ",
+           "can only be published to RStudio Connect.")
+    }
+  } else {
+    if (identical(upload, FALSE)) {
+      # it is not possible to deploy to Connect without uploading
+      stop("RStudio Connect does not support deploying without uploading. ",
+           "Specify upload=TRUE to upload and re-deploy your application.")
+    }
+  }
+
+  client <- clientForAccount(accountDetails)
   if(verbose){
     urlstr <- serverInfo(accountDetails$server)$url
     url <- parseHttpUrl(urlstr)
@@ -340,8 +362,8 @@ deployApp <- function(appDir = getwd(),
         bundleSize <- file.info(bundlePath)$size
 
         # Generate a hex-encoded md5 hash.
-        checkSum <- md5sum(bundlePath)
-        bundle <- client$createBundle(application$id, "application/x-tar", bundleSize, checkSum)
+        checksum <- fileMD5.as.string(bundlePath)
+        bundle <- client$createBundle(application$id, "application/x-tar", bundleSize, checksum)
 
         if (verbose)
           timestampedLog("Starting upload now")
@@ -420,7 +442,7 @@ deployApp <- function(appDir = getwd(),
   }
 
   if (!quiet)
-    openURL(client, application, launch.browser, deploymentSucceeded)
+    openURL(client, application, launch.browser, on.failure, deploymentSucceeded)
 
   # invoke post-deploy hook if we have one
   if (deploymentSucceeded) {
@@ -704,7 +726,7 @@ validURL <- function(url) {
   !(is.null(url) || url == '')
 }
 
-openURL <- function(client, application, launch.browser, deploymentSucceeded) {
+openURL <- function(client, application, launch.browser, on.failure, deploymentSucceeded) {
 
   # function to browse to a URL using user-supplied browser (config or final)
   showURL <- function(url) {
@@ -725,11 +747,17 @@ openURL <- function(client, application, launch.browser, deploymentSucceeded) {
     }
     if (validURL(url)) {
       # Connect should always end up here, even on deployment failures
-      showURL(url)
+      if (deploymentSucceeded) {
+        showURL(url)
+      } else if (is.function(on.failure)) {
+        on.failure(url)
+      }
     }
   } else if (deploymentSucceeded) {
     # shinyapps.io should land here if things succeeded
     showURL(application$url)
+  } else if (is.function(on.failure)) {
+    on.failure(NULL)
   }
     # or open no url if things failed
 }

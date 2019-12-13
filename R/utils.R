@@ -192,7 +192,10 @@ capitalize <- function(x) {
 }
 
 activeEncoding <- function(project = getwd()) {
+
   defaultEncoding <- getOption("encoding")
+  if (identical(defaultEncoding, "native.enc"))
+    defaultEncoding <- "unknown"
 
   # attempt to locate .Rproj file
   files <- list.files(project, full.names = TRUE)
@@ -206,15 +209,31 @@ activeEncoding <- function(project = getwd()) {
   if (length(encodingLine) != 1)
     return(defaultEncoding)
 
+  # remove 'Encoding:' prefix
   sub("^Encoding:\\s*", "", encodingLine)
+
 }
 
-md5sum <- function(path) {
-  # open the file for reading in binary mode (to ensure we treat newlines
-  # literally when computing the md5)
-  con <- base::file(path, open = "rb")
-  on.exit(close(con), add = TRUE)
+# Returns the MD5 for path as a raw sequence of 16 hexadecimal pairs.
+fileMD5 <- function(path) {
+  # Use digest::digest to compute file MD5. FIPS mode disables openssl::md5. Workaround until we can
+  # migrate away from MD5 for file content checks.
+  #
+  # See: https://github.com/rstudio/rsconnect/issues/363
 
-  # compute md5 sum of contents and return as ordinary characters
-  unclass(as.character(openssl::md5(con)))
+  if (is.null(path)) {
+    return(digest::digest("", algo = "md5", serialize = FALSE, raw = TRUE))
+  }
+
+  digest::digest(path, algo = "md5", file = TRUE, raw = TRUE)
+}
+
+# Returns the MD5 for path as a 32-character concatenated string of hexadecimal characters.
+fileMD5.as.string <- function(path) {
+  md5.as.string(fileMD5(path))
+}
+
+# Returns the input md5 as a 32-character concatenated string of hexadecimal characters.
+md5.as.string <- function(md5) {
+  paste(md5, collapse = "")
 }
