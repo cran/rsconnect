@@ -25,16 +25,24 @@ bundleAppDir <- function(appDir, appFiles, appPrimaryDoc = NULL, verbose = FALSE
       dir.create(dirname(to), recursive = TRUE)
     file.copy(from, to)
 
-    # ensure .Rprofile doesn't call packrat/init.R
+    # ensure .Rprofile doesn't call packrat/init.R or renv/activate.R
     if (basename(to) == ".Rprofile") {
       origRprofile <- readLines(to)
       msg <- paste0("# Modified by rsconnect package ", packageVersion("rsconnect"), " on ", Sys.time(), ":")
-      replacement <- paste(msg,
-                           "# Packrat initialization disabled in published application",
-                           '# source(\"packrat/init.R\")', sep="\n")
-      newRprofile <- gsub( 'source(\"packrat/init.R\")',
-                           replacement,
-                           origRprofile, fixed = TRUE)
+
+      packratReplacement <- paste(msg,
+                                  "# Packrat initialization disabled in published application",
+                                  '# source(\"packrat/init.R\")', sep="\n")
+      renvReplacement <- paste(msg,
+                               "# renv initialization disabled in published application",
+                               '# source(\"renv/activate.R\")', sep="\n")
+      newRprofile <- origRprofile
+      newRprofile <- gsub('source(\"packrat/init.R\")',
+                          packratReplacement,
+                          newRprofile, fixed = TRUE)
+      newRprofile <- gsub('source(\"renv/activate.R\")',
+                          renvReplacement,
+                          newRprofile, fixed = TRUE)
       cat(newRprofile, file=to, sep="\n")
     }
 
@@ -52,71 +60,89 @@ isKnitrCacheDir <- function(subdir, contents) {
   }
 }
 
-maxDirectoryList <- function(dir, parent, totalSize) {
+# dir is the path for this step on our recursive walk.
+# depth is tracks the number of directories we have descended. depth==0 at the root.
+# totalSize is a running total of our encountered file sizes.
+# totalFiles is a running count of our encountered files.
+maxDirectoryList <- function(dir, depth, totalFiles, totalSize) {
   # generate a list of files at this level
   contents <- list.files(dir, recursive = FALSE, all.files = TRUE,
                          include.dirs = TRUE, no.. = TRUE, full.names = FALSE)
 
-  # at the root level, exclude those with a forbidden extension
-  if (nchar(parent) == 0) {
+  # At the root, some well-known files and directories are not included in the bundle.
+  if (depth==0) {
     contents <- contents[!grepl(glob2rx("*.Rproj"), contents)]
-    contents <- contents[!grepl(glob2rx(".DS_Store"), contents)]
-    contents <- contents[!grepl(glob2rx(".gitignore"), contents)]
-    contents <- contents[!grepl(glob2rx(".Rhistory"), contents)]
-    contents <- contents[!grepl(glob2rx("manifest.json"), contents)]
+    contents <- setdiff(contents, c(
+                                      ".DS_Store",
+                                      ".gitignore",
+                                      ".Rhistory",
+                                      "manifest.json",
+                                      "rsconnect",
+                                      "packrat",
+                                      "app_cache",
+                                      ".svn",
+                                      ".git",
+                                      ".Rproj.user"
+                                  ))
   }
 
   # exclude renv files
   contents <- setdiff(contents, c("renv", "renv.lock"))
 
-  # sum the size of the files in the directory
-  info <- file.info(file.path(dir, contents))
-  size <- sum(info$size)
-  if (is.na(size))
-    size <- 0
-  totalSize <- totalSize + size
+  # subdirContents contains all files encountered beneath this directory.
+  # Returned paths are relative to this directory.
   subdirContents <- NULL
 
-  # if we haven't exceeded the maximum size, check each subdirectory
-  if (totalSize < getOption("rsconnect.max.bundle.size")) {
-    subdirs <- contents[info$isdir]
-    for (subdir in subdirs) {
+  # Info for each file lets us know to recurse (directories) or aggregate (files).
+  infos <- file.info(file.path(dir, contents), extra_cols = FALSE)
+  row.names(infos) <- contents
 
-      # ignore known directories from the root
-      if (nchar(parent) == 0 && subdir %in% c(
-           "rsconnect", "packrat", ".svn", ".git", ".Rproj.user"))
-        next
+  for (name in contents) {
+    info <- infos[name,]
+
+    if (info$isdir) {
+      # Directories do not include their self-size in our counts.
 
       # ignore knitr _cache directories
-      if (isKnitrCacheDir(subdir, contents))
+      if (isKnitrCacheDir(name, contents)) {
         next
+      }
 
-      # get the list of files in the subdirectory
-      dirList <- maxDirectoryList(file.path(dir, subdir),
-                                  if (nchar(parent) == 0) subdir
-                                  else file.path(parent, subdir),
-                                  totalSize)
-      totalSize <- totalSize + dirList$size
-      subdirContents <- append(subdirContents, dirList$contents)
+      # Recursively enumerate this directory.
+      dirList <- maxDirectoryList(file.path(dir, name), depth+1, totalFiles, totalSize)
 
-      # abort if we've reached the maximum size
-      if (totalSize > getOption("rsconnect.max.bundle.size"))
-        break
+      # Inherit the running totals from our child.
+      totalSize <- dirList$totalSize
+      totalFiles <- dirList$totalFiles
 
-      # abort if we've reached the maximum number of files
-      if ((length(contents) + length(subdirContents)) >
-          getOption("rsconnect.max.bundle.files"))
-        break
+      # Directories are not included, only their files.
+      subdirContents <- append(subdirContents, file.path(name, dirList$contents))
+
+    } else {
+      # This is a file. It counts and is included in our listing.
+
+      totalSize <- totalSize + info$size
+      totalFiles <- totalFiles + 1
+      subdirContents <- append(subdirContents, name)
     }
+
+    # abort if we've reached the maximum size
+    if (totalSize > getOption("rsconnect.max.bundle.size"))
+      break
+
+    # abort if we've reached the maximum number of files
+    if (totalFiles > getOption("rsconnect.max.bundle.files"))
+      break
   }
 
-  # return the new size and accumulated contents
+  # totalSize - incoming size summed with all file sizes beneath this directory.
+  # totalFiles - incoming count summed with file count beneath this directory.
+  # contents - all files beneath this directory; paths relative to this directory.
   list(
-    size = size,
-    totalSize = totalSize,
-    contents = append(if (nchar(parent) == 0) contents[!info$isdir]
-                      else file.path(parent, contents[!info$isdir]),
-                      subdirContents))
+      totalSize = totalSize,
+      totalFiles = totalFiles,
+      contents = subdirContents
+  )
 }
 
 #' List Files to be Bundled
@@ -150,7 +176,7 @@ maxDirectoryList <- function(dir, parent, totalSize) {
 #'
 #' @export
 listBundleFiles <- function(appDir) {
-  maxDirectoryList(appDir, "", 0)
+  maxDirectoryList(appDir, 0, 0, 0)
 }
 
 bundleFiles <- function(appDir) {
@@ -171,7 +197,8 @@ bundleFiles <- function(appDir) {
 }
 
 bundleApp <- function(appName, appDir, appFiles, appPrimaryDoc, assetTypeName,
-                      contentCategory, verbose = FALSE, python = NULL) {
+                      contentCategory, verbose = FALSE, python = NULL,
+                      condaMode = FALSE, forceGenerate = FALSE) {
   logger <- verboseLogger(verbose)
 
   logger("Inferring App mode and parameters")
@@ -216,8 +243,11 @@ bundleApp <- function(appName, appDir, appFiles, appPrimaryDoc, assetTypeName,
       appPrimaryDoc = appPrimaryDoc,
       assetTypeName = assetTypeName,
       users = users,
+      condaMode = condaMode,
+      forceGenerate = forceGenerate,
       python = python,
-      hasPythonRmd = hasPythonRmd)
+      hasPythonRmd = hasPythonRmd,
+      retainPackratDirectory = TRUE)
   manifestJson <- enc2utf8(toJSON(manifest, pretty = TRUE))
   manifestPath <- file.path(bundleDir, "manifest.json")
   writeLines(manifestJson, manifestPath, useBytes = TRUE)
@@ -228,13 +258,60 @@ bundleApp <- function(appName, appDir, appFiles, appPrimaryDoc, assetTypeName,
 
   # create the bundle and return its path
   logger("Compressing the bundle")
-  prevDir <- setwd(bundleDir)
-
-  on.exit(setwd(prevDir), add = TRUE)
   bundlePath <- tempfile("rsconnect-bundle", fileext = ".tar.gz")
-  utils::tar(bundlePath, files = ".", compression = "gzip", tar = "internal")
+  writeBundle(bundleDir, bundlePath)
   bundlePath
 }
+
+# Writes a tar.gz file located at bundlePath containing all files in bundleDir.
+writeBundle <- function(bundleDir, bundlePath, verbose = FALSE) {
+  logger <- verboseLogger(verbose)
+
+  prevDir <- setwd(bundleDir)
+  on.exit(setwd(prevDir), add = TRUE)
+
+  tarImplementation <- Sys.getenv("RSCONNECT_TAR", "internal")
+  logger(sprintf("Using tar: %s", tarImplementation))
+
+  if (tarImplementation == "internal") {
+    detectLongNames(bundleDir)
+  }
+
+  utils::tar(bundlePath, files = NULL, compression = "gzip", tar = tarImplementation)
+}
+
+# uname/grname is not always available.
+# https://github.com/wch/r-source/blob/8cf68878a1361d00ff2125db2e1ac7dc8f6c8009/src/library/utils/R/tar.R#L539-L549
+longerThan <- function(s, lim) {
+  if (!is.null(s) && !is.na(s)) {
+    return(nchar(s) > lim)
+  }
+  return(FALSE)
+}
+
+# Scan the bundle directory looking for long user/group names.
+#
+# Warn that the internal tar implementation may produce invalid archives.
+# https://github.com/rstudio/rsconnect/issues/446
+# https://bugs.r-project.org/bugzilla/show_bug.cgi?id=17871
+detectLongNames <- function(bundleDir, lengthLimit = 32) {
+  files <- list.files(bundleDir, recursive = TRUE, all.files = TRUE,
+                      include.dirs = TRUE, no.. = TRUE, full.names = FALSE)
+  for (f in files) {
+    info <- file.info(file.path(bundleDir,f))
+
+
+    if (longerThan(info$uname, lengthLimit) || longerThan(info$grname, lengthLimit)) {
+      warning("The bundle contains files with user/group names having more than ", lengthLimit,
+              " characters: ", f, " is owned by ", info$uname, ":", info$grname, ". ",
+              "Long user and group names cause the internal R tar implementation to produce invalid archives. ",
+              "Set the RSCONNECT_TAR environment variable to use an external tar command.")
+      return(invisible(TRUE))
+    }
+  }
+  return(invisible(FALSE))
+}
+
 
 #' Create a manifest.json describing deployment requirements.
 #'
@@ -263,12 +340,21 @@ bundleApp <- function(appName, appDir, appFiles, appPrimaryDoc, assetTypeName,
 #'   If python = NULL, and RETICULATE_PYTHON is set in the environment,
 #'   its value will be used.
 #'
+#' @param forceGeneratePythonEnvironment Optional. If an existing
+#'   `requirements.txt` file is found, it will be overwritten when
+#'   this argument is `TRUE`.
+#'
+#'
 #' @export
 writeManifest <- function(appDir = getwd(),
                           appFiles = NULL,
                           appPrimaryDoc = NULL,
                           contentCategory = NULL,
-                          python = NULL) {
+                          python = NULL,
+                          forceGeneratePythonEnvironment = FALSE) {
+
+  condaMode <- FALSE
+
   if (is.null(appFiles)) {
     appFiles <- bundleFiles(appDir)
   } else {
@@ -310,14 +396,20 @@ writeManifest <- function(appDir = getwd(),
       appPrimaryDoc = appPrimaryDoc,
       assetTypeName = "content",
       users = NULL,
+      condaMode = condaMode,
+      forceGenerate = forceGeneratePythonEnvironment,
       python = python,
-      hasPythonRmd = hasPythonRmd)
+      hasPythonRmd = hasPythonRmd,
+      retainPackratDirectory = FALSE)
+
   manifestJson <- enc2utf8(toJSON(manifest, pretty = TRUE))
   manifestPath <- file.path(appDir, "manifest.json")
   writeLines(manifestJson, manifestPath, useBytes = TRUE)
 
-  srcRequirementsFile <- file.path(bundleDir, "requirements.txt")
-  dstRequirementsFile <- file.path(appDir, "requirements.txt")
+  requirementsFilename <- manifest$python$package_manager$package_file
+  if (is.null(requirementsFilename)) { requirementsFilename <- "requirements.txt" }
+  srcRequirementsFile <- file.path(bundleDir, requirementsFilename)
+  dstRequirementsFile <- file.path(appDir, requirementsFilename)
   if(file.exists(srcRequirementsFile) && !file.exists(dstRequirementsFile)) {
     file.copy(srcRequirementsFile, dstRequirementsFile)
   }
@@ -419,23 +511,31 @@ inferAppMode <- function(appDir, appPrimaryDoc, files) {
     return("shiny")
   }
 
-  # shiny directory
-  shinyFiles <- grep("^(server|app).r$", files, ignore.case = TRUE, perl = TRUE)
-  if (length(shinyFiles) > 0) {
+  # Shiny application using single-file app.R style.
+  appR <- grep("^app.r$", files, ignore.case = TRUE, perl = TRUE)
+  if (length(appR) > 0) {
     return("shiny")
   }
 
-  rmdFiles <- grep("^[^/\\\\]+\\.rmd$", files, ignore.case = TRUE, perl = TRUE,
-                   value = TRUE)
+  # Determine if we have Rmd and if they are (optionally) need the Shiny runtime.
+  rmdFiles <- grep("^[^/\\\\]+\\.rmd$", files, ignore.case = TRUE, perl = TRUE, value = TRUE)
+  shinyRmdFiles <- sapply(file.path(appDir, rmdFiles), isShinyRmd)
 
-  # if there are one or more R Markdown documents, use the Shiny app mode if any
-  # are Shiny documents
+  # An Rmd file with a Shiny runtime uses rmarkdown::run.
+  if (any(shinyRmdFiles)) {
+    return("rmd-shiny")
+  }
+
+  # Shiny application using server.R; checked later than Rmd with shiny runtime
+  # because server.R may contain the server code paired with a ShinyRmd and needs
+  # to be run by rmarkdown::run (rmd-shiny).
+  serverR <- grep("^server.r$", files, ignore.case = TRUE, perl = TRUE)
+  if (length(serverR) > 0) {
+    return("shiny")
+  }
+
+  # Any non-Shiny R Markdown documents are rendered content (rmd-static).
   if (length(rmdFiles) > 0) {
-    for (rmdFile in rmdFiles) {
-      if (isShinyRmd(file.path(appDir, rmdFile))) {
-        return("rmd-shiny")
-      }
-    }
     return("rmd-static")
   }
 
@@ -503,13 +603,53 @@ inferDependencies <- function(appMode, hasParameters, python, hasPythonRmd) {
   unique(deps)
 }
 
-inferPythonEnv <- function(workdir, python) {
+isWindows <- function() {
+  Sys.info()[["sysname"]] == "Windows"
+}
+
+getCondaEnvPrefix <- function(python) {
+  prefix <- dirname(dirname(python))
+  if (!file.exists(file.path(prefix, "conda-meta"))) {
+    stop(paste("Python from", python, "does not look like a conda environment: cannot find `conda-meta`"))
+  }
+  prefix
+}
+
+getCondaExeForPrefix <- function(prefix) {
+  miniconda <- dirname(dirname(prefix))
+  conda <- file.path(miniconda, 'bin', 'conda')
+  if (isWindows()) {
+    conda <- paste(conda, ".exe", sep = "")
+  }
+  if (!file.exists(conda)) {
+    stop(paste("Conda env prefix", prefix, "does not have the `conda` command line interface."))
+  }
+  conda
+}
+
+inferPythonEnv <- function(workdir, python, condaMode, forceGenerate) {
   # run the python introspection script
   env_py <- system.file("resources/environment.py", package = "rsconnect")
-  args <- c(shQuote(env_py), shQuote(workdir))
+  args <- c(shQuote(env_py))
+  if (condaMode || forceGenerate) {
+    flags <- paste('-', ifelse(condaMode, 'c', ''), ifelse(forceGenerate, 'f', ''), sep = '')
+    args <- c(args, flags)
+  }
+  args <- c(args, shQuote(workdir))
 
   tryCatch({
-    output <- system2(command = python, args = args, stdout = TRUE, stderr = NULL, wait = TRUE)
+    # First check for reticulate. Then see if python is loaded in reticulate space, verify anaconda presence,
+    # and verify that the user hasn't specified that they don't want their conda environment captured.
+    if('reticulate' %in% rownames(installed.packages()) && reticulate::py_available(initialize = FALSE) &&
+       reticulate::py_config()$anaconda && !condaMode) {
+      prefix <- getCondaEnvPrefix(python)
+      conda <- getCondaExeForPrefix(prefix)
+      args <- c("run", "-p", prefix, python, args)
+      # conda run -p <prefix> python inst/resources/environment.py <flags> <dir>
+      output <- system2(command = conda, args = args, stdout = TRUE, stderr = NULL, wait = TRUE)
+    } else {
+      output <- system2(command = python, args = args, stdout = TRUE, stderr = NULL, wait = TRUE)
+    }
     environment <- jsonlite::fromJSON(output)
     if (is.null(environment$error)) {
       list(
@@ -530,11 +670,14 @@ inferPythonEnv <- function(workdir, python) {
 }
 
 createAppManifest <- function(appDir, appMode, contentCategory, hasParameters,
-                              appPrimaryDoc, assetTypeName, users, python = NULL,
-                              hasPythonRmd = FALSE) {
+                              appPrimaryDoc, assetTypeName, users, condaMode,
+                              forceGenerate, python = NULL, hasPythonRmd = FALSE,
+                              retainPackratDirectory = TRUE) {
 
   # provide package entries for all dependencies
   packages <- list()
+  # non-SCM repository sources without URLs
+  missing_url_sources <- NULL
   # potential error messages
   msg      <- NULL
   pyInfo   <- NULL
@@ -551,9 +694,9 @@ createAppManifest <- function(appDir, appMode, contentCategory, hasParameters,
       name <- deps[i, "Package"]
 
       if (name == "reticulate" && !is.null(python)) {
-        pyInfo <- inferPythonEnv(appDir, python)
+        pyInfo <- inferPythonEnv(appDir, python, condaMode, forceGenerate)
         if (is.null(pyInfo$error)) {
-          # write the package list into requirements.txt file in the bundle dir
+          # write the package list into requirements.txt/environment.yml file in the bundle dir
           packageFile <- file.path(appDir, pyInfo$package_manager$package_file)
           cat(pyInfo$package_manager$contents, file=packageFile, sep="\n")
           pyInfo$package_manager$contents <- NULL
@@ -566,6 +709,14 @@ createAppManifest <- function(appDir, appMode, contentCategory, hasParameters,
       # get package info
       info <- as.list(deps[i, c('Source',
                                 'Repository')])
+
+      if (is.na(info$Repository)) {
+        if (isSCMSource(info$Source)) {
+          # ignore source+SCM packages
+        } else {
+          missing_url_sources <- unique(c(missing_url_sources, info$Source))
+        }
+      }
 
       # include github package info
       info <- c(info, as.list(deps[i, grep('Github', colnames(deps), perl = TRUE, value = TRUE)]))
@@ -591,7 +742,23 @@ createAppManifest <- function(appDir, appMode, contentCategory, hasParameters,
       packages[[name]] <- info
     }
   }
+  if (length(missing_url_sources)) {
+    # Err when packages lack repository URL. We emit a warning about each package (see
+    # snapshotDependencies) before issuing an error with this resolution advice.
+    #
+    # It's possible we cannot find a repository URL for other reasons, including when folks locally
+    # build and install packages from source. An incorrectly configured "repos" option is almost
+    # always the cause.
+    msg <- c(msg, sprintf("Unable to determine the location for some packages. Packages must come from a package repository like CRAN or a source control system. Check that options('repos') refers to a package repository containing the needed package versions."))
+  }
+
   if (length(msg)) stop(paste(formatUL(msg, '\n*'), collapse = '\n'), call. = FALSE)
+
+  if (!retainPackratDirectory) {
+    # Optionally remove the packrat directory when it will not be included in
+    # deployments, such as manifest-only deployments.
+    unlink(file.path(appDir, "packrat"), recursive = TRUE)
+  }
 
   # build the list of files to checksum
   files <- list.files(appDir, recursive = TRUE, all.files = TRUE,
@@ -667,7 +834,7 @@ createAppManifest <- function(appDir, appMode, contentCategory, hasParameters,
 
 validatePackageSource <- function(pkg) {
   msg <- NULL
-  if (!(pkg$Source %in% c("CRAN", "Bioconductor", "github"))) {
+  if (!(pkg$Source %in% c("CRAN", "Bioconductor", "github", "gitlab", "bitbucket"))) {
     if (is.null(pkg$Repository)) {
       msg <- paste("The package was installed from an unsupported ",
                    "source '", pkg$Source, "'.", sep = "")

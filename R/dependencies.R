@@ -73,14 +73,36 @@ snapshotDependencies <- function(appDir, implicit_dependencies=c()) {
     sapply(repos, "[[", 1)
   )
 
+  # read available.packages filters (allow user to override if necessary;
+  # this is primarily to allow debugging)
+  #
+  # note that we explicitly exclude the 'R_version' filter as we want to ensure
+  # that packages which require newer versions of R than the one currently
+  # in use can still be marked as available on CRAN -- for example, currently
+  # the package 'foreign' requires 'R (>= 4.0.0)' but older versions of R
+  # can still successfully install older versions from the CRAN archive
+  filters <- getOption(
+    "available_packages_filters",
+    default = c("duplicates")
+  )
+
   # get Bioconductor repos if any
-  biocRepos = repos[grep('BioC', names(repos), perl=TRUE, value=TRUE)]
-  if (length(biocRepos) > 0) {
-    biocPackages = available.packages(contriburl = contrib.url(biocRepos, type = "source"), type = "source")
-  } else {
-    biocPackages = c()
+  biocRepos <- repos[grep('BioC', names(repos), perl = TRUE, value = TRUE)]
+  biocPackages <- if (length(biocRepos) > 0) {
+    available.packages(
+      contriburl = contrib.url(biocRepos, type = "source"),
+      type = "source",
+      filters = filters
+    )
   }
-  repo.packages <- available.packages(contriburl = contrib.url(repos, type = "source"), type = "source")
+
+  # read available packages
+  repo.packages <- available.packages(
+    contriburl = contrib.url(repos, type = "source"),
+    type = "source",
+    filters = filters
+  )
+
   named.repos <- name.all.repos(repos)
   repo.lookup <- data.frame(
     name = names(named.repos),
@@ -101,7 +123,7 @@ snapshotDependencies <- function(appDir, implicit_dependencies=c()) {
       if (pkg %in% biocPackages) {
         repository <- biocPackages[pkg, 'Repository']
       }
-    } else if (tolower(source) %in% c("github", "bitbucket", "source")) {
+    } else if (isSCMSource(source)) {
       # leave source+SCM packages alone.
     } else if (pkg %in% rownames(repo.packages)) {
       # capture CRAN-like repository
@@ -109,7 +131,9 @@ snapshotDependencies <- function(appDir, implicit_dependencies=c()) {
       # Find this package in the set of available packages then use its
       # contrib.url to map back to the configured repositories.
       package.contrib <- repo.packages[pkg, 'Repository']
-      package.repo <- repo.lookup[repo.lookup$contrib.url == package.contrib, ][1, ]
+      package.repo.index <- vapply(repo.lookup$contrib.url,
+                                   function(url) grepl(url, package.contrib, fixed = TRUE), logical(1))
+      package.repo <- repo.lookup[package.repo.index, ][1, ]
       # If the incoming package comes from CRAN, keep the CRAN name in place
       # even if that means using a different name than the repos list.
       #
@@ -122,13 +146,20 @@ snapshotDependencies <- function(appDir, implicit_dependencies=c()) {
       }
       repository <- package.repo$url
     } else {
-      warning(sprintf("Unable to find repository URL for package %s", pkg),
-              immediate. = TRUE)
+      warning(sprintf("Unable to determine the repository for package %s", pkg),
+              call. = FALSE, immediate. = TRUE)
     }
     data.frame(Source = source, Repository = repository)
   })
   records[, c("Source","Repository")] <- do.call("rbind", tmp)
   return(records)
+}
+
+# Return TRUE when the source indicates that a package was installed from
+# source or comes from a source control system. This indicates that we will
+# not have a repostory URL; location is recorded elsewhere.
+isSCMSource <- function(source) {
+  tolower(source) %in% c("github", "gitlab", "bitbucket", "source")
 }
 
 # generate a random name prefixed with "repo_".

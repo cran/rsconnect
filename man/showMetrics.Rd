@@ -4,17 +4,25 @@
 \alias{showMetrics}
 \title{Show Application Metrics}
 \usage{
-showMetrics(metricSeries, metricNames, appDir = getwd(),
-  appName = NULL, account = NULL, server = NULL, from = NULL,
-  until = NULL, interval = NULL)
+showMetrics(
+  metricSeries,
+  metricNames,
+  appDir = getwd(),
+  appName = NULL,
+  account = NULL,
+  server = NULL,
+  from = NULL,
+  until = NULL,
+  interval = NULL
+)
 }
 \arguments{
 \item{metricSeries}{Metric series to query. Refer to the
-\href{http://docs.rstudio.com/shinyapps.io/metrics.html#ApplicationMetrics}{shinyapps.io documentation}
+\href{https://docs.rstudio.com/shinyapps.io/metrics.html#ApplicationMetrics}{shinyapps.io documentation}
 for available series.}
 
 \item{metricNames}{Metric names in the series to query. Refer to the
-\href{http://docs.rstudio.com/shinyapps.io/metrics.html#ApplicationMetrics}{shinyapps.io documentation}
+\href{https://docs.rstudio.com/shinyapps.io/metrics.html#ApplicationMetrics}{shinyapps.io documentation}
 for available metrics.}
 
 \item{appDir}{Directory containing application. Defaults to

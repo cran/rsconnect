@@ -43,7 +43,7 @@ applications <- function(account = NULL, server = NULL) {
   serverDetails <- serverInfo(accountDetails$server)
   client <- clientForAccount(accountDetails)
 
-  isConnect <- !isShinyapps(accountDetails)
+  isConnect <- isConnectInfo(accountInfo = accountDetails)
 
   # retrieve applications
   apps <- client$listApplications(accountDetails$accountId)
@@ -83,6 +83,8 @@ applications <- function(account = NULL, server = NULL) {
     lapply(res, function(x) {
       # promote the size and instance data to first-level fields
       x$size <- x$deployment$properties$application.instances.template
+      if (is.null(x$size))
+        x$size <- NA
       x$instances <- x$deployment$properties$application.instances.count
       if (is.null(x$instances))
         x$instances <- NA
@@ -92,21 +94,23 @@ applications <- function(account = NULL, server = NULL) {
     })
   }
 
-  # convert to data frame
+  # The config URL may be provided by the server at some point, but for now
+  # infer it from the account type
+  res <- lapply(res, function(row) {
+    if (isConnect) {
+      prefix <- sub("/__api__", "", serverDetails$url)
+      row$config_url <- paste(prefix, "connect/#/apps", row$id, sep = "/")
+    } else {
+      row$config_url <- paste("https://www.shinyapps.io/admin/#/application", row$id, sep = "/")
+    }
+    row
+  })
 
+  # convert to data frame
   rbindWithoutFactors <- function(...){
     rbind.data.frame(..., stringsAsFactors = FALSE)
   }
   res <- do.call(rbindWithoutFactors, res)
-
-  # this may be provided by the server at some point, but for now infer it
-  # from the account type
-  res$config_url <- if (!isConnect){
-    paste("https://www.shinyapps.io/admin/#/application", res$id, sep = "/")
-  } else {
-    prefix <- sub("/__api__", "", serverDetails$url)
-    paste(prefix, "connect/#/apps", res$id, sep = "/")
-  }
 
   # Ensure the Connect and ShinyApps.io data frames have same column names
   idx <- match("last_deployed_time", names(res))
@@ -235,5 +239,82 @@ showLogs <- function(appPath = getwd(), appFile = NULL, appName = NULL,
     # if not streaming, poll for the entries directly
     logs <- client$getLogs(application$id, entries)
     cat(logs)
+  }
+}
+
+#' Sync Application Metadata
+#'
+#' Update the metadata for requested application across all deployments
+#'
+#' @param appPath The path to the directory or file that was deployed.
+#'
+#' @note This function does not update metadata for Shiny and rpubs apps
+#'
+#' @export
+syncAppMetadata <- function(appPath) {
+  if (is.null(appPath) || !file.exists(appPath)) {
+    stop("appPath is null or does not exist")
+  }
+
+  # get all of the currently known deployments
+  deploys <- deployments(appPath)
+
+  syncWindow = getOption("rsconnect.metadata.sync.hours", 24) * 3600
+  now = as.numeric(Sys.time())
+
+  for (i in 1:nrow(deploys)) {
+    lastSyncTime <- deploys[i, "lastSyncTime"]
+
+    # for legacy dcf files that don't have sync time saved yet
+    if (is.null(lastSyncTime) || is.na(lastSyncTime))
+      lastSyncTime <- deploys[i, "when"]
+
+    # don't sync if within the configured time window
+    if (as.numeric(lastSyncTime) + syncWindow > now) {
+      next
+    }
+
+    # don't sync non-connect apps
+    if (!isConnectInfo(server = deploys[i, "hostUrl"])) {
+      next
+    }
+
+    account <- rsconnect::accountInfo(deploys[i, "account"],
+                                      server = deploys[i, "server"])
+
+    connect <- clientForAccount(account)
+
+    application <- NULL
+
+    # if the app does not exist, delete the file
+    tryCatch({
+      application <- connect$getApplication(deploys[i, "appId"])
+    }, error = function(c) {
+      message(paste("appId", deploys[i, "appId"], "no longer exists, deleting config file"))
+      file.remove(deploys[i, "deploymentFile"])
+      stop("Removed config file ", deploys[i, "deploymentFile"])
+    })
+
+    record <- deploymentRecord(
+      name = deploys[i, "name"],
+      title = application$title,
+      username = deploys[i, "username"],
+      account = deploys[i, "account"],
+      server = deploys[i, "server"],
+      hostUrl = deploys[i, "hostUrl"],
+      appId = deploys[i, "appId"],
+      bundleId = deploys[i, "bundleId"],
+      url = application$url,
+      when = deploys[i, "when"],
+      lastSyncTime = now,
+      metadata = list(
+        asMultiple = deploys[i, "asMultiple"],
+        asStatic = deploys[i, "asStatic"],
+        vanity_url = application$vanity_url
+      )
+    )
+
+    # update the record and save out a new config file
+    writeDeploymentRecord(record, deploys[i, "deploymentFile"])
   }
 }

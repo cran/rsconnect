@@ -64,6 +64,9 @@
 #'   If python = NULL, and RETICULATE_PYTHON is set in the environment, its
 #'   value will be used. The specified python binary will be invoked to determine
 #'   its version and to list the python packages installed in the environment.
+#' @param forceGeneratePythonEnvironment Optional. If an existing
+#'   `requirements.txt` file is found, it will be overwritten when this argument
+#'   is `TRUE`.
 #' @examples
 #' \dontrun{
 #'
@@ -109,7 +112,10 @@ deployApp <- function(appDir = getwd(),
                       metadata = list(),
                       forceUpdate = getOption("rsconnect.force.update.apps", FALSE),
                       python = NULL,
-                      on.failure = NULL) {
+                      on.failure = NULL,
+                      forceGeneratePythonEnvironment = FALSE) {
+
+  condaMode <- FALSE
 
   if (!isStringParam(appDir))
     stop(stringParamErrorMessage("appDir"))
@@ -311,7 +317,7 @@ deployApp <- function(appDir = getwd(),
   accountDetails <- accountInfo(target$account, target$server)
 
   # test for compatibility between account type and publish intent
-  if (isShinyapps(accountDetails)) {
+  if (isShinyapps(accountDetails$server)) {
     # ensure we aren't trying to publish an API to shinyapps.io; this will not
     # currently end well
     if (identical(contentCategory, "api")) {
@@ -354,9 +360,10 @@ deployApp <- function(appDir = getwd(),
       # python is enabled on Connect but not on Shinyapps
       python <- getPythonForTarget(python, accountDetails)
       bundlePath <- bundleApp(target$appName, appDir, appFiles,
-                              appPrimaryDoc, assetTypeName, contentCategory, verbose, python)
+                              appPrimaryDoc, assetTypeName, contentCategory, verbose, python,
+                              condaMode, forceGeneratePythonEnvironment)
 
-      if (isShinyapps(accountDetails)) {
+      if (isShinyapps(accountDetails$server)) {
 
         # Step 1. Create presigned URL and register pending bundle.
         bundleSize <- file.info(bundlePath)$size
@@ -476,7 +483,7 @@ getPython <- function(path) {
 
 getPythonForTarget <- function(path, accountDetails) {
   # python is enabled on Connect but not on Shinyapps
-  targetIsShinyapps <- isShinyapps(accountDetails)
+  targetIsShinyapps <- isShinyapps(accountDetails$server)
   pythonEnabled = getOption("rsconnect.python.enabled", default=!targetIsShinyapps)
   if (pythonEnabled) {
     getPython(path)
@@ -781,4 +788,3 @@ runStartupScripts <- function(appDir, logLevel) {
     }
   }
 }
-
