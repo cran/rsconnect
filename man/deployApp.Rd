@@ -34,7 +34,8 @@ directory.}
 
 \item{appFiles}{The files and directories to bundle and deploy (only if
 \code{upload = TRUE}). Can be \code{NULL}, in which case all the files in the
-directory containing the application are bundled. Takes precedence over
+directory containing the application are bundled, with the exception of
+any listed in an \code{.rcsignore} file. Takes precedence over
 \code{appFileManifest} if both are supplied.}
 
 \item{appFileManifest}{An alternate way to specify the files to be deployed;

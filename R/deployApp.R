@@ -8,7 +8,8 @@
 #'   directory.
 #' @param appFiles The files and directories to bundle and deploy (only if
 #'   `upload = TRUE`). Can be `NULL`, in which case all the files in the
-#'   directory containing the application are bundled. Takes precedence over
+#'   directory containing the application are bundled, with the exception of
+#'   any listed in an `.rcsignore` file. Takes precedence over
 #'   `appFileManifest` if both are supplied.
 #' @param appFileManifest An alternate way to specify the files to be deployed;
 #'   a file containing the names of the files, one per line, relative to the
@@ -159,7 +160,7 @@ deployApp <- function(appDir = getwd(),
       cat("----- Deployment error -----\n")
       cat(geterrmessage(), "\n")
       cat("----- Error stack trace -----\n")
-      traceback(3, sys.calls())
+      traceback(x = sys.calls(), max.lines = 3)
     })
     on.exit(options(error = errOption), add = TRUE)
   }
@@ -186,7 +187,7 @@ deployApp <- function(appDir = getwd(),
   # of supporting documents)
   rmdFile <- ""
   if (!file.info(appDir)$isdir) {
-    if (grepl("\\.Rmd$", appDir, ignore.case = TRUE) ||
+    if (grepl("\\.[Rq]md$", appDir, ignore.case = TRUE) ||
         grepl("\\.html?$", appDir, ignore.case = TRUE)) {
       return(deployDoc(appDir, appName = appName, appTitle = appTitle,
                        account = account, server = server, upload = upload,
@@ -359,9 +360,13 @@ deployApp <- function(appDir = getwd(),
 
       # python is enabled on Connect but not on Shinyapps
       python <- getPythonForTarget(python, accountDetails)
+      quarto <- getQuartoManifestDetails(metadata)
       bundlePath <- bundleApp(target$appName, appDir, appFiles,
                               appPrimaryDoc, assetTypeName, contentCategory, verbose, python,
-                              condaMode, forceGeneratePythonEnvironment)
+                              condaMode, forceGeneratePythonEnvironment,
+                              quarto,
+                              isTRUE(metadata$serverRender),
+                              isShinyapps(accountDetails$server))
 
       if (isShinyapps(accountDetails$server)) {
 
@@ -491,6 +496,16 @@ getPythonForTarget <- function(path, accountDetails) {
   else {
     NULL
   }
+}
+
+getQuartoManifestDetails <- function(metadata = list()) {
+  if (!is.null(metadata[["quarto_version"]])) {
+    return(list(
+        "version" = metadata[["quarto_version"]],
+        "engines" = metadata[["quarto_engines"]]
+    ))
+  }
+  return(NULL)
 }
 
 # calculate the deployment target based on the passed parameters and

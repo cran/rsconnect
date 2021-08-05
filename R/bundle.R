@@ -82,12 +82,23 @@ maxDirectoryList <- function(dir, depth, totalFiles, totalSize) {
                                       "app_cache",
                                       ".svn",
                                       ".git",
+                                      ".quarto",
                                       ".Rproj.user"
                                   ))
   }
 
   # exclude renv files
   contents <- setdiff(contents, c("renv", "renv.lock"))
+
+
+  # checks for .rscignore file and excludes the files and directories listed
+  if (".rscignore" %in% contents) {
+    ignoreContents <- readLines(".rscignore")
+    contents <- setdiff(
+      x = contents,
+      y = ignoreContents
+    )
+  }
 
   # subdirContents contains all files encountered beneath this directory.
   # Returned paths are relative to this directory.
@@ -100,7 +111,7 @@ maxDirectoryList <- function(dir, depth, totalFiles, totalSize) {
   for (name in contents) {
     info <- infos[name,]
 
-    if (info$isdir) {
+    if (isTRUE(info$isdir)) {
       # Directories do not include their self-size in our counts.
 
       # ignore knitr _cache directories
@@ -120,8 +131,13 @@ maxDirectoryList <- function(dir, depth, totalFiles, totalSize) {
 
     } else {
       # This is a file. It counts and is included in our listing.
+      if (is.na(info$isdir)) {
+        cat(sprintf("File information for %s is not available; listing as a normal file.\n",
+                    file.path(dir, name)))
+      }
 
-      totalSize <- totalSize + info$size
+      ourSize <- if (is.na(info$size)) { 0 } else { info$size }
+      totalSize <- totalSize + ourSize
       totalFiles <- totalFiles + 1
       subdirContents <- append(subdirContents, name)
     }
@@ -165,6 +181,10 @@ maxDirectoryList <- function(dir, depth, totalFiles, totalSize) {
 #' \item{Certain files and folders that don't need to be bundled, such as
 #'    those containing internal version control and RStudio state, are
 #'    excluded.}
+#' \item{In order to stop specific files in the working directory from being
+#'    listed in the bundle, the files must be listed in the .rscignore file.
+#'    This file must have one file or directory per line with no support for
+#'    wildcards.}
 #' }
 #'
 #' @return Returns a list containing the following elements:
@@ -198,14 +218,16 @@ bundleFiles <- function(appDir) {
 
 bundleApp <- function(appName, appDir, appFiles, appPrimaryDoc, assetTypeName,
                       contentCategory, verbose = FALSE, python = NULL,
-                      condaMode = FALSE, forceGenerate = FALSE) {
+                      condaMode = FALSE, forceGenerate = FALSE, quarto = NULL,
+                      serverRender = FALSE, isShinyApps = FALSE) {
   logger <- verboseLogger(verbose)
 
   logger("Inferring App mode and parameters")
   appMode <- inferAppMode(
       appDir = appDir,
       appPrimaryDoc = appPrimaryDoc,
-      files = appFiles)
+      files = appFiles,
+      quarto = quarto)
   appPrimaryDoc <- inferAppPrimaryDoc(
       appPrimaryDoc = appPrimaryDoc,
       appFiles = appFiles,
@@ -233,6 +255,49 @@ bundleApp <- function(appName, appDir, appFiles, appPrimaryDoc, assetTypeName,
       appPrimaryDoc = appPrimaryDoc)
   on.exit(unlink(bundleDir, recursive = TRUE), add = TRUE)
 
+  # if this is quarto then disable server rendering if requested
+  if (!is.null(quarto) && !serverRender && getOption("rsconnect.server.noprerender", TRUE)) {
+    logger("Disabling server render for Quarto interactive document")
+    disablePrerender <- c(
+      '### QUARTO: Disable Server Render',
+      'Sys.setenv(RMARKDOWN_RUN_PRERENDER = "0")',
+      '###'
+    )
+    rProfile <- file.path(bundleDir, ".Rprofile")
+    if (file.exists(rProfile)) {
+      write(disablePrerender, file = rProfile, sep = "\n", append = TRUE)
+    } else {
+      writeLines(disablePrerender, rProfile, useBytes = TRUE)
+    }
+  }
+
+  # if this is quarto-shiny and there is no "runtime" yaml then inject it
+  # (provides compatibility w/ server: shiny)
+  if (appMode == "quarto-shiny" && getOption("rsconnect.server.qmd.compatibility", TRUE)) {
+    # rename appPrimaryDoc to use .Rmd extension
+    if (tolower(tools::file_ext(appPrimaryDoc)) == "qmd") {
+      renamedAppPrimaryDoc <- paste0(file_path_sans_ext(appPrimaryDoc), ".Rmd")
+      file.rename(
+        file.path(bundleDir, appPrimaryDoc),
+        file.path(bundleDir, renamedAppPrimaryDoc)
+      )
+      appPrimaryDoc <- renamedAppPrimaryDoc
+    }
+  }
+
+  # provide runtime: shinyrmd if necessary
+  if (appMode == "quarto-shiny" && getOption("rsconnect.server.yaml.compatibility", TRUE)) {
+    srcPath <- file.path(bundleDir, appPrimaryDoc)
+    yaml <- rmarkdown::yaml_front_matter(srcPath)
+    if (is.null(yaml$runtime)) {
+      opts = options(encoding = "native.enc")
+      on.exit(options(opts), add = TRUE)
+      src <- readLines(srcPath, encoding = "UTF-8", warn = FALSE)
+      src <- c("---", "runtime: shinyrmd", src[-1])
+      writeLines(enc2utf8(src), srcPath, useBytes = TRUE)
+    }
+  }
+
   # generate the manifest and write it into the bundle dir
   logger("Generate manifest.json")
   manifest <- createAppManifest(
@@ -248,6 +313,8 @@ bundleApp <- function(appName, appDir, appFiles, appPrimaryDoc, assetTypeName,
       python = python,
       hasPythonRmd = hasPythonRmd,
       retainPackratDirectory = TRUE,
+      quarto,
+      isShinyApps = isShinyApps,
       verbose = verbose)
   manifestJson <- enc2utf8(toJSON(manifest, pretty = TRUE))
   manifestPath <- file.path(bundleDir, "manifest.json")
@@ -368,7 +435,8 @@ writeManifest <- function(appDir = getwd(),
   appMode <- inferAppMode(
       appDir = appDir,
       appPrimaryDoc = appPrimaryDoc,
-      files = appFiles)
+      files = appFiles,
+      quarto = NULL)
   appPrimaryDoc <- inferAppPrimaryDoc(
       appPrimaryDoc = appPrimaryDoc,
       appFiles = appFiles,
@@ -405,6 +473,8 @@ writeManifest <- function(appDir = getwd(),
       python = python,
       hasPythonRmd = hasPythonRmd,
       retainPackratDirectory = FALSE,
+      quarto = NULL,
+      isShinyApps = FALSE,
       verbose = verbose)
   manifestJson <- enc2utf8(toJSON(manifest, pretty = TRUE))
   manifestPath <- file.path(appDir, "manifest.json")
@@ -448,7 +518,7 @@ rmdHasPythonBlock <- function(filename) {
 }
 
 appHasPythonRmd <- function(appDir, files) {
-  rmdFiles <- grep("^[^/\\\\]+\\.rmd$", files, ignore.case = TRUE, perl = TRUE,
+  rmdFiles <- grep("^[^/\\\\]+\\.[rq]md$", files, ignore.case = TRUE, perl = TRUE,
                    value = TRUE)
 
   if (length(rmdFiles) > 0) {
@@ -467,7 +537,13 @@ appHasParameters <- function(appDir, appPrimaryDoc, appMode, contentCategory) {
   # deployment to be considered parameterized.
   #
   # https://github.com/rstudio/rsconnect/issues/246
-  if (!(appMode %in% c("rmd-static", "rmd-shiny"))) {
+  parameterAppModes <- c(
+      "rmd-static",
+      "rmd-shiny",
+      "quarto-static",
+      "quarto-shiny"
+  )
+  if (!(appMode %in% parameterAppModes)) {
     return(FALSE)
   }
   # Sites don't ever have parameters
@@ -492,9 +568,16 @@ isShinyRmd <- function(filename) {
   yaml <- yamlFromRmd(filename)
   if (!is.null(yaml)) {
     runtime <- yaml[["runtime"]]
+    server <- yaml[["server"]]
     if (!is.null(runtime) && grepl('^shiny', runtime)) {
       # ...and "runtime: shiny", then it's a dynamic Rmd.
       return(TRUE)
+    } else if (!is.null(server)) {
+      if (identical(server, "shiny")) {
+        return(TRUE)
+      } else if (is.list(server) && identical(server[["type"]], "shiny")) {
+        return(TRUE)
+      }
     }
   }
   return(FALSE)
@@ -502,7 +585,7 @@ isShinyRmd <- function(filename) {
 
 # infer the mode of the application from its layout
 # unless we're an API, in which case, we're API mode.
-inferAppMode <- function(appDir, appPrimaryDoc, files) {
+inferAppMode <- function(appDir, appPrimaryDoc, files, quarto) {
   # plumber API
   plumberFiles <- grep("^(plumber|entrypoint).r$", files, ignore.case = TRUE, perl = TRUE)
   if (length(plumberFiles) > 0) {
@@ -522,12 +605,16 @@ inferAppMode <- function(appDir, appPrimaryDoc, files) {
   }
 
   # Determine if we have Rmd and if they are (optionally) need the Shiny runtime.
-  rmdFiles <- grep("^[^/\\\\]+\\.rmd$", files, ignore.case = TRUE, perl = TRUE, value = TRUE)
+  rmdFiles <- grep("^[^/\\\\]+\\.[rq]md$", files, ignore.case = TRUE, perl = TRUE, value = TRUE)
   shinyRmdFiles <- sapply(file.path(appDir, rmdFiles), isShinyRmd)
 
   # An Rmd file with a Shiny runtime uses rmarkdown::run.
   if (any(shinyRmdFiles)) {
-    return("rmd-shiny")
+    if (is.null(quarto)) {
+      return("rmd-shiny")
+    } else {
+      return("quarto-shiny")
+    }
   }
 
   # Shiny application using server.R; checked later than Rmd with shiny runtime
@@ -540,7 +627,11 @@ inferAppMode <- function(appDir, appPrimaryDoc, files) {
 
   # Any non-Shiny R Markdown documents are rendered content (rmd-static).
   if (length(rmdFiles) > 0) {
-    return("rmd-static")
+    if (is.null(quarto)) {
+      return("rmd-static")
+    } else {
+      return("quarto-static")
+    }
   }
 
   # We don't have an RMarkdown, Shiny app, or Plumber API, but we have a saved model
@@ -561,10 +652,16 @@ inferAppMode <- function(appDir, appPrimaryDoc, files) {
 inferAppPrimaryDoc <- function(appPrimaryDoc, appFiles, appMode) {
   # if deploying an R Markdown app or static content, infer a primary document
   # if not already specified
-  if ((grepl("rmd", appMode, fixed = TRUE) || appMode == "static")
-      && is.null(appPrimaryDoc)) {
+  docAppModes <- c(
+      "static",
+      "rmd-shiny",
+      "rmd-static",
+      "quarto-shiny",
+      "quarto-static"
+  )
+  if ((appMode %in% docAppModes) && is.null(appPrimaryDoc)) {
     # determine expected primary document extension
-    ext <- ifelse(appMode == "static", "html?", "Rmd")
+    ext <- ifelse(appMode == "static", "html?", "[Rq]md")
 
     # use index file if it exists
     primary <- which(grepl(paste0("^index\\.", ext, "$"), appFiles, fixed = FALSE,
@@ -586,19 +683,32 @@ inferAppPrimaryDoc <- function(appPrimaryDoc, appFiles, appMode) {
 }
 
 ## check for extra dependencies congruent to application mode
-inferDependencies <- function(appMode, hasParameters, python, hasPythonRmd) {
+inferDependencies <- function(appMode, hasParameters, python, hasPythonRmd, quarto) {
   deps <- c()
-  if (grepl("\\brmd\\b", appMode)) {
+  if (appMode == "rmd-static") {
     if (hasParameters) {
       # An Rmd with parameters needs shiny to run the customization app.
       deps <- c(deps, "shiny")
     }
     deps <- c(deps, "rmarkdown")
   }
-  if (grepl("\\bshiny\\b", appMode)) {
+  if (appMode == "quarto-static") {
+    # Quarto documents need R when the knitr execution engine is used, not always.
+    if (!is.null(quarto) && "knitr" %in% quarto[["engines"]]) {
+        deps <- c(deps, "rmarkdown")
+    }
+  }
+  if (appMode == "quarto-shiny") {
+    # Quarto Shiny documents are executed with rmarkdown::run
+    deps <- c(deps, "rmarkdown", "shiny")
+  }
+  if (appMode == "rmd-shiny") {
+    deps <- c(deps, "rmarkdown", "shiny")
+  }
+  if (appMode == "shiny") {
     deps <- c(deps, "shiny")
   }
-  if (appMode == 'api') {
+  if (appMode == "api") {
     deps <- c(deps, "plumber")
   }
   if (hasPythonRmd) {
@@ -677,6 +787,8 @@ createAppManifest <- function(appDir, appMode, contentCategory, hasParameters,
                               appPrimaryDoc, assetTypeName, users, condaMode,
                               forceGenerate, python = NULL, hasPythonRmd = FALSE,
                               retainPackratDirectory = TRUE,
+                              quarto = NULL,
+                              isShinyApps = FALSE,
                               verbose = FALSE) {
 
   # provide package entries for all dependencies
@@ -693,13 +805,13 @@ createAppManifest <- function(appDir, appMode, contentCategory, hasParameters,
       !identical(appMode, "tensorflow-saved-model")) {
 
     # detect dependencies including inferred dependencies
-    deps = snapshotDependencies(appDir, inferDependencies(appMode, hasParameters, python, hasPythonRmd),
-                                verbose = verbose)
+    inferredDependencies <- inferDependencies(appMode, hasParameters, python, hasPythonRmd, quarto)
+    deps = snapshotDependencies(appDir, inferredDependencies, verbose = verbose)
 
     # construct package list from dependencies
 
     logger <- verboseLogger(verbose)
-    for (i in seq.int(nrow(deps))) {
+    for (i in seq_len(nrow(deps))) {
       name <- deps[i, "Package"]
 
       if (name == "reticulate" && !is.null(python)) {
@@ -803,7 +915,7 @@ createAppManifest <- function(appDir, appMode, contentCategory, hasParameters,
   primaryDoc <- ifelse(is.null(appPrimaryDoc) ||
                          tolower(tools::file_ext(appPrimaryDoc)) == "r",
                        NA, appPrimaryDoc)
-  metadata$primary_rmd <- ifelse(grepl("\\brmd\\b", appMode), primaryDoc, NA)
+  metadata$primary_rmd <- ifelse(appMode %in% c("rmd-shiny","rmd-static","quarto-shiny","quarto-static"), primaryDoc, NA)
   metadata$primary_html <- ifelse(appMode == "static", primaryDoc, NA)
 
   # emit content category (plots, etc)
@@ -814,11 +926,15 @@ createAppManifest <- function(appDir, appMode, contentCategory, hasParameters,
   # add metadata
   manifest$metadata <- metadata
 
+  # indicate whether this is a quarto app/doc
+  if (!is.null(quarto) && !isShinyApps) {
+    manifest$quarto <- quarto
+  }
   # if there is python info for reticulate, attach it
   if (!is.null(pyInfo)) {
     manifest$python <- pyInfo
   }
-  # if there are no packages set manifes$packages to NA (json null)
+  # if there are no packages set manifest$packages to NA (json null)
   if (length(packages) > 0) {
     manifest$packages <- I(packages)
   } else {
@@ -907,7 +1023,7 @@ addPackratSnapshot <- function(bundleDir, implicit_dependencies = c(), verbose =
 
     # print a traceback if enabled
     if (isTRUE(getOption("rsconnect.error.trace"))) {
-      traceback(3, sys.calls())
+      traceback(x = sys.calls(), max.lines = 3)
     }
 
     # rethrow error so we still halt deployment
@@ -921,6 +1037,12 @@ addPackratSnapshot <- function(bundleDir, implicit_dependencies = c(), verbose =
     unlink(tempDependencyFile)
   }
 
+  preservePackageDescriptions(bundleDir)
+
+  invisible()
+}
+
+preservePackageDescriptions <- function(bundleDir) {
   # Copy all the DESCRIPTION files we're relying on into packrat/desc.
   # That directory will contain one file for each package, e.g.
   # packrat/desc/shiny will be the shiny package's DESCRIPTION.
@@ -932,8 +1054,9 @@ addPackratSnapshot <- function(bundleDir, implicit_dependencies = c(), verbose =
   descDir <- file.path(bundleDir, "packrat", "desc")
   tryCatch({
     dir.create(descDir)
-    packages <- na.omit(read.dcf(lockFilePath)[,"Package"])
-    lapply(packages, function(pkgName) {
+    records <- utils::tail(read.dcf(lockFilePath), -1)
+    lapply(seq_len(nrow(records)), function(i) {
+      pkgName <- records[i, "Package"]
       descFile <- system.file("DESCRIPTION", package = pkgName)
       if (!file.exists(descFile)) {
         stop("Couldn't find DESCRIPTION file for ", pkgName)
@@ -946,10 +1069,8 @@ addPackratSnapshot <- function(bundleDir, implicit_dependencies = c(), verbose =
       unlink(descDir, recursive = TRUE)
     }
   })
-
   invisible()
 }
-
 
 # given a list of mixed files and directories, explodes the directories
 # recursively into their constituent files, and returns just a list of files

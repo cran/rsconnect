@@ -38,8 +38,7 @@ deployDoc <- function(doc, ...) {
 
   # see if this doc has runtime: shiny_prerendered, if it does then
   # appFiles will be NULL (bundle the entire directory)
-  yaml <- yamlFromRmd(doc)
-  if (is.list(yaml) && (identical(yaml$runtime, "shiny_prerendered") || identical(yaml$runtime, "shinyrmd"))) {
+  if (isShinyRmd(doc)) {
     app_files <- NULL
   } else {
     # default to deploying just the single file specified
@@ -48,7 +47,7 @@ deployDoc <- function(doc, ...) {
     # if this document's type supports automated resource discovery, do that now,
     # and add the discovered files to the deployment list
     ext <- tolower(tools::file_ext(doc))
-    if (ext %in% c("rmd", "html", "htm")) {
+    if (ext %in% c("rmd", "qmd", "html", "htm")) {
       message("Discovering document dependencies... ", appendLF = FALSE)
       res <- rmarkdown::find_external_resources(qualified_doc)
       message("OK")
