@@ -1,4 +1,19 @@
-[#](#) NEWS
+# NEWS
+
+## 0.8.25
+
+Released to CRAN on 2021-11-16
+
+* Use the `curl` option `-T` when uploading files to avoid out of memory
+  errors with large files. (#544)
+* The `rsconnect.max.bundle.size` and `rsconnect.max.bundle.files` options are
+  enforced when processing an enumerated set of files. Previously, these
+  limits were enforced only when bundling an entire content directory. (#542)
+* Preserve file time stamps when copying files into the bundle staging
+  directory, which then propagates into the created tar file. (#540)
+* Configuration directories align with CRAN policy and use the location named
+  by `tools::R_user_dir`. Configuration created by earlier versions of this
+  package is automatically migrated to the new location. (#550)
 
 ## 0.8.24
 

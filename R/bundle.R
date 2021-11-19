@@ -23,7 +23,7 @@ bundleAppDir <- function(appDir, appFiles, appPrimaryDoc = NULL, verbose = FALSE
     }
     if (!file.exists(dirname(to)))
       dir.create(dirname(to), recursive = TRUE)
-    file.copy(from, to)
+    file.copy(from, to, copy.date = TRUE)
 
     # ensure .Rprofile doesn't call packrat/init.R or renv/activate.R
     if (basename(to) == ".Rprofile") {
@@ -201,19 +201,22 @@ listBundleFiles <- function(appDir) {
 
 bundleFiles <- function(appDir) {
   files <- listBundleFiles(appDir)
-  if (files$totalSize > getOption("rsconnect.max.bundle.size")) {
+  enforceBundleLimits(appDir, files$totalSize, length(files$contents))
+  files$contents
+}
+
+enforceBundleLimits <- function(appDir, totalSize, totalFiles) {
+  if (totalSize > getOption("rsconnect.max.bundle.size")) {
     stop("The directory ", appDir, " cannot be deployed because it is too ",
          "large (the maximum size is ", getOption("rsconnect.max.bundle.size"),
          " bytes). Remove some files or adjust the rsconnect.max.bundle.size ",
-         "option.")
-  } else if (length(files$contents) > getOption("rsconnect.max.bundle.files")) {
+         "option.", call. = FALSE)
+  } else if (totalFiles > getOption("rsconnect.max.bundle.files")) {
     stop("The directory ", appDir, " cannot be deployed because it contains ",
          "too many files (the maximum number of files is ",
          getOption("rsconnect.max.bundle.files"), "). Remove some files or ",
-         "adjust the rsconnect.max.bundle.files option.")
+         "adjust the rsconnect.max.bundle.files option.", call. = TRUE)
   }
-
-  files$contents
 }
 
 bundleApp <- function(appName, appDir, appFiles, appPrimaryDoc, assetTypeName,
@@ -1076,6 +1079,8 @@ preservePackageDescriptions <- function(bundleDir) {
 # recursively into their constituent files, and returns just a list of files
 explodeFiles <- function(dir, files) {
   exploded <- c()
+  totalSize <- 0
+  totalFiles <- 0
   for (f in files) {
     target <- file.path(dir, f)
     info <- file.info(target)
@@ -1086,11 +1091,28 @@ explodeFiles <- function(dir, files) {
       # a directory; explode it
       contents <- list.files(target, full.names = FALSE, recursive = TRUE,
                              include.dirs = FALSE)
-      exploded <- c(exploded, file.path(f, contents))
+      contentPaths <- file.path(f, contents)
+      contentInfos <- file.info(contentPaths)
+
+      totalSize <- totalSize + sum(contentInfos$size, na.rm = TRUE)
+      totalFiles <- totalFiles + length(contentPaths)
+
+      exploded <- c(exploded, contentPaths)
     } else {
       # not a directory; an ordinary file
+
+      ourSize <- if (is.na(info$size)) { 0 } else { info$size }
+      totalSize <- totalSize + ourSize
+      totalFiles <- totalFiles + 1
+
       exploded <- c(exploded, f)
     }
+    # Limits are being enforced after processing each entry on the
+    # input. This means that an input directory needs to be fully
+    # enumerated before issuing an error. This is different from the
+    # approach by bundleFiles, which enforces limits while walking
+    # directories.
+    enforceBundleLimits(dir, totalSize, totalFiles)
   }
   exploded
 }
@@ -1107,6 +1129,14 @@ performPackratSnapshot <- function(bundleDir, verbose = FALSE) {
   packrat::opts$snapshot.recommended.packages(TRUE, persist = FALSE)
   on.exit(packrat::opts$snapshot.recommended.packages(srp, persist = FALSE),
           add = TRUE)
+
+  # Force renv dependency scanning within packrat unless the option has been
+  # explicitly configured. This is a no-op for older versions of packrat.
+  renvDiscovery = getOption("packrat.dependency.discovery.renv")
+  if (is.null(renvDiscovery)) {
+    oldDiscovery <- options("packrat.dependency.discovery.renv" = TRUE)
+    on.exit(options(oldDiscovery), add = TRUE)
+  }
 
   # attempt to eagerly load the BiocInstaller or BiocManaager package if installed, to work around
   # an issue where attempts to load the package could fail within a 'suppressMessages()' context
