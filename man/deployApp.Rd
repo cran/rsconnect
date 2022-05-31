@@ -19,13 +19,16 @@ deployApp(
   upload = TRUE,
   recordDir = NULL,
   launch.browser = getOption("rsconnect.launch.browser", interactive()),
+  on.failure = NULL,
   logLevel = c("normal", "quiet", "verbose"),
   lint = TRUE,
   metadata = list(),
   forceUpdate = getOption("rsconnect.force.update.apps", FALSE),
   python = NULL,
-  on.failure = NULL,
-  forceGeneratePythonEnvironment = FALSE
+  forceGeneratePythonEnvironment = FALSE,
+  quarto = NULL,
+  appVisibility = NULL,
+  image = NULL
 )
 }
 \arguments{
@@ -86,6 +89,9 @@ launched automatically after the app is started. Defaults to \code{TRUE} in
 interactive sessions only. If a function is passed, it will be called
 after the app is started, with the app URL as a paramter.}
 
+\item{on.failure}{Function to be called if the deployment fails. If a
+deployment log URL is available, it's passed as a parameter.}
+
 \item{logLevel}{One of \code{"quiet"}, \code{"normal"} or \code{"verbose"}; indicates how
 much logging to the console is to be performed. At \code{"quiet"} reports no
 information; at \code{"verbose"}, a full diagnostic log is captured.}
@@ -103,16 +109,25 @@ asking. If \code{FALSE}, ask to update. If unset, defaults to the value of
 
 \item{python}{Full path to a python binary for use by \code{reticulate}.
 Required if \code{reticulate} is a dependency of the app being deployed.
-If python = NULL, and RETICULATE_PYTHON is set in the environment, its
-value will be used. The specified python binary will be invoked to determine
-its version and to list the python packages installed in the environment.}
-
-\item{on.failure}{Function to be called if the deployment fails. If a
-deployment log URL is available, it's passed as a parameter.}
+If python = NULL, and RETICULATE_PYTHON or RETICULATE_PYTHON_FALLBACK is
+set in the environment, its value will be used. The specified python binary
+will be invoked to determine its version and to list the python packages
+installed in the environment.}
 
 \item{forceGeneratePythonEnvironment}{Optional. If an existing
 \code{requirements.txt} file is found, it will be overwritten when this argument
 is \code{TRUE}.}
+
+\item{quarto}{Optional. Full path to a Quarto binary for use deploying Quarto
+content. The provided Quarto binary will be used to run \verb{quarto inspect}
+to gather information about the content.}
+
+\item{appVisibility}{One of \code{NULL}, "private"\verb{, or }"public"\verb{; the visibility of the deployment. When }NULL`, no change to visibility is
+made. Currently has an effect only on deployments to shinyapps.io.}
+
+\item{image}{Optional. The name of the image to use when building and
+executing this content. If none is provided, RStudio Connect will
+attempt to choose an image based on the content requirements.}
 }
 \description{
 Deploy a \link[shiny:shiny-package]{shiny} application, an
@@ -140,6 +155,10 @@ deployApp()
 
 # deploy but don't launch a browser when completed
 deployApp(launch.browser = FALSE)
+
+# deploy a Quarto website, using the quarto package to
+# find the Quarto binary
+deployApp("~/projects/quarto/site1", quarto = quarto::quarto_path())
 }
 }
 \seealso{

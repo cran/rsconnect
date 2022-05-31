@@ -62,12 +62,22 @@
 #'   `getOption("rsconnect.force.update.apps", FALSE)`.
 #' @param python Full path to a python binary for use by `reticulate`.
 #'   Required if `reticulate` is a dependency of the app being deployed.
-#'   If python = NULL, and RETICULATE_PYTHON is set in the environment, its
-#'   value will be used. The specified python binary will be invoked to determine
-#'   its version and to list the python packages installed in the environment.
+#'   If python = NULL, and RETICULATE_PYTHON or RETICULATE_PYTHON_FALLBACK is
+#'   set in the environment, its value will be used. The specified python binary
+#'   will be invoked to determine its version and to list the python packages
+#'   installed in the environment.
 #' @param forceGeneratePythonEnvironment Optional. If an existing
 #'   `requirements.txt` file is found, it will be overwritten when this argument
 #'   is `TRUE`.
+#' @param quarto Optional. Full path to a Quarto binary for use deploying Quarto
+#'   content. The provided Quarto binary will be used to run `quarto inspect`
+#'   to gather information about the content.
+#' @param appVisibility One of `NULL`, "private"`, or `"public"`; the
+#'   visibility of the deployment. When `NULL`, no change to visibility is
+#'   made. Currently has an effect only on deployments to shinyapps.io.
+#' @param image Optional. The name of the image to use when building and
+#'   executing this content. If none is provided, RStudio Connect will
+#'   attempt to choose an image based on the content requirements.
 #' @examples
 #' \dontrun{
 #'
@@ -89,6 +99,10 @@
 #'
 #' # deploy but don't launch a browser when completed
 #' deployApp(launch.browser = FALSE)
+#'
+#' # deploy a Quarto website, using the quarto package to
+#' # find the Quarto binary
+#' deployApp("~/projects/quarto/site1", quarto = quarto::quarto_path())
 #' }
 #' @seealso [applications()], [terminateApp()], and [restartApp()]
 #' @family Deployment functions
@@ -108,13 +122,17 @@ deployApp <- function(appDir = getwd(),
                       recordDir = NULL,
                       launch.browser = getOption("rsconnect.launch.browser",
                                                  interactive()),
+                      on.failure = NULL,
                       logLevel = c("normal", "quiet", "verbose"),
                       lint = TRUE,
                       metadata = list(),
                       forceUpdate = getOption("rsconnect.force.update.apps", FALSE),
                       python = NULL,
-                      on.failure = NULL,
-                      forceGeneratePythonEnvironment = FALSE) {
+                      forceGeneratePythonEnvironment = FALSE,
+                      quarto = NULL,
+                      appVisibility = NULL,
+                      image = NULL
+                      ) {
 
   condaMode <- FALSE
 
@@ -351,6 +369,23 @@ deployApp <- function(appDir = getwd(),
     application <- applicationForTarget(client, accountDetails, target, forceUpdate)
   })
 
+  if (isShinyapps(accountDetails$server) && !is.null(appVisibility)) {
+    # Shinyapps defaults to public visibility.
+    # Other values should be set before data is deployed.
+    currentVisibility <- application$deployment$properties$application.visibility
+    if (is.null(currentVisibility)) {
+      currentVisibility <- "public"
+    }
+
+    if (!identical(appVisibility, currentVisibility)) {
+      withStatus(paste0("Setting visibility to ", appVisibility), {
+        client$setApplicationProperty(application$id,
+                                   "application.visibility",
+                                   appVisibility)
+      })
+    }
+  }
+
   if (upload) {
     # create, and upload the bundle
     if (verbose)
@@ -360,13 +395,10 @@ deployApp <- function(appDir = getwd(),
 
       # python is enabled on Connect but not on Shinyapps
       python <- getPythonForTarget(python, accountDetails)
-      quarto <- getQuartoManifestDetails(metadata)
       bundlePath <- bundleApp(target$appName, appDir, appFiles,
                               appPrimaryDoc, assetTypeName, contentCategory, verbose, python,
-                              condaMode, forceGeneratePythonEnvironment,
-                              quarto,
-                              isTRUE(metadata$serverRender),
-                              isShinyapps(accountDetails$server))
+                              condaMode, forceGeneratePythonEnvironment, quarto,
+                              isShinyapps(accountDetails$server), metadata, image)
 
       if (isShinyapps(accountDetails$server)) {
 
@@ -477,7 +509,8 @@ deployApp <- function(appDir = getwd(),
 
 getPython <- function(path) {
   if (is.null(path)) {
-    path <- Sys.getenv("RETICULATE_PYTHON")
+    path <- Sys.getenv("RETICULATE_PYTHON",
+                       unset = Sys.getenv("RETICULATE_PYTHON_FALLBACK"))
     if (path == "") {
       return(NULL)
     }
@@ -496,16 +529,6 @@ getPythonForTarget <- function(path, accountDetails) {
   else {
     NULL
   }
-}
-
-getQuartoManifestDetails <- function(metadata = list()) {
-  if (!is.null(metadata[["quarto_version"]])) {
-    return(list(
-        "version" = metadata[["quarto_version"]],
-        "engines" = metadata[["quarto_engines"]]
-    ))
-  }
-  return(NULL)
 }
 
 # calculate the deployment target based on the passed parameters and

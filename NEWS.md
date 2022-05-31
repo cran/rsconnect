@@ -1,5 +1,26 @@
 # NEWS
 
+## 0.8.26
+
+Released to CRAN on 2022-05-31
+
+* Add ability to resend shinyapps.io application invitations (#543)
+* Show expiration status in shinyapps.io for invitations (#543)
+* Allow shinyapps.io deployments to be private at creation time (#403)
+* Update the minimum `openssl` version to 2.0.0 to enable publishing for users
+  on FIPS-compliant systems without the need for API keys. (#452)
+* Added Quarto support to `writeManifest`, which requires passing the absolute
+  path to a Quarto executable to its new `quarto` parameter
+* Added `quarto` parameter to `deployApp` to enable deploying Quarto documents
+  and websites by supplying the path to a Quarto executable
+* Added support for deploying Quarto content that uses only the `jupyter` runtime
+* Added support for selecting a target `image` in the bundle manifest
+* The `showLogs` function takes a `server` parameter. (#57)
+* Added the `rsconnect.tar` option, which can be used to specify the path to a
+  `tar` implementation instead of R's internal implementation. The previous
+  method, using the `RSCONNECT_TAR` environment variable, still works, but the
+  new option will take precedence if both are set.
+
 ## 0.8.25
 
 Released to CRAN on 2021-11-16

@@ -222,15 +222,22 @@ enforceBundleLimits <- function(appDir, totalSize, totalFiles) {
 bundleApp <- function(appName, appDir, appFiles, appPrimaryDoc, assetTypeName,
                       contentCategory, verbose = FALSE, python = NULL,
                       condaMode = FALSE, forceGenerate = FALSE, quarto = NULL,
-                      serverRender = FALSE, isShinyApps = FALSE) {
+                      isShinyApps = FALSE, metadata = list(), image = NULL) {
   logger <- verboseLogger(verbose)
+
+  quartoInfo <- inferQuartoInfo(
+    appDir = appDir,
+    appPrimaryDoc = appPrimaryDoc,
+    quarto = quarto,
+    metadata = metadata
+  )
 
   logger("Inferring App mode and parameters")
   appMode <- inferAppMode(
       appDir = appDir,
       appPrimaryDoc = appPrimaryDoc,
       files = appFiles,
-      quarto = quarto)
+      quartoInfo = quartoInfo)
   appPrimaryDoc <- inferAppPrimaryDoc(
       appPrimaryDoc = appPrimaryDoc,
       appFiles = appFiles,
@@ -240,7 +247,7 @@ bundleApp <- function(appName, appDir, appFiles, appPrimaryDoc, assetTypeName,
       appPrimaryDoc = appPrimaryDoc,
       appMode = appMode,
       contentCategory = contentCategory)
-  hasPythonRmd <- appHasPythonRmd(
+  documentsHavePython <- detectPythonInDocuments(
       appDir = appDir,
       files = appFiles)
 
@@ -258,49 +265,6 @@ bundleApp <- function(appName, appDir, appFiles, appPrimaryDoc, assetTypeName,
       appPrimaryDoc = appPrimaryDoc)
   on.exit(unlink(bundleDir, recursive = TRUE), add = TRUE)
 
-  # if this is quarto then disable server rendering if requested
-  if (!is.null(quarto) && !serverRender && getOption("rsconnect.server.noprerender", TRUE)) {
-    logger("Disabling server render for Quarto interactive document")
-    disablePrerender <- c(
-      '### QUARTO: Disable Server Render',
-      'Sys.setenv(RMARKDOWN_RUN_PRERENDER = "0")',
-      '###'
-    )
-    rProfile <- file.path(bundleDir, ".Rprofile")
-    if (file.exists(rProfile)) {
-      write(disablePrerender, file = rProfile, sep = "\n", append = TRUE)
-    } else {
-      writeLines(disablePrerender, rProfile, useBytes = TRUE)
-    }
-  }
-
-  # if this is quarto-shiny and there is no "runtime" yaml then inject it
-  # (provides compatibility w/ server: shiny)
-  if (appMode == "quarto-shiny" && getOption("rsconnect.server.qmd.compatibility", TRUE)) {
-    # rename appPrimaryDoc to use .Rmd extension
-    if (tolower(tools::file_ext(appPrimaryDoc)) == "qmd") {
-      renamedAppPrimaryDoc <- paste0(file_path_sans_ext(appPrimaryDoc), ".Rmd")
-      file.rename(
-        file.path(bundleDir, appPrimaryDoc),
-        file.path(bundleDir, renamedAppPrimaryDoc)
-      )
-      appPrimaryDoc <- renamedAppPrimaryDoc
-    }
-  }
-
-  # provide runtime: shinyrmd if necessary
-  if (appMode == "quarto-shiny" && getOption("rsconnect.server.yaml.compatibility", TRUE)) {
-    srcPath <- file.path(bundleDir, appPrimaryDoc)
-    yaml <- rmarkdown::yaml_front_matter(srcPath)
-    if (is.null(yaml$runtime)) {
-      opts = options(encoding = "native.enc")
-      on.exit(options(opts), add = TRUE)
-      src <- readLines(srcPath, encoding = "UTF-8", warn = FALSE)
-      src <- c("---", "runtime: shinyrmd", src[-1])
-      writeLines(enc2utf8(src), srcPath, useBytes = TRUE)
-    }
-  }
-
   # generate the manifest and write it into the bundle dir
   logger("Generate manifest.json")
   manifest <- createAppManifest(
@@ -314,10 +278,11 @@ bundleApp <- function(appName, appDir, appFiles, appPrimaryDoc, assetTypeName,
       condaMode = condaMode,
       forceGenerate = forceGenerate,
       python = python,
-      hasPythonRmd = hasPythonRmd,
+      documentsHavePython = documentsHavePython,
       retainPackratDirectory = TRUE,
-      quarto,
+      quartoInfo = quartoInfo,
       isShinyApps = isShinyApps,
+      image = image,
       verbose = verbose)
   manifestJson <- enc2utf8(toJSON(manifest, pretty = TRUE))
   manifestPath <- file.path(bundleDir, "manifest.json")
@@ -341,7 +306,7 @@ writeBundle <- function(bundleDir, bundlePath, verbose = FALSE) {
   prevDir <- setwd(bundleDir)
   on.exit(setwd(prevDir), add = TRUE)
 
-  tarImplementation <- Sys.getenv("RSCONNECT_TAR", "internal")
+  tarImplementation <- getTarImplementation()
   logger(sprintf("Using tar: %s", tarImplementation))
 
   if (tarImplementation == "internal") {
@@ -350,6 +315,21 @@ writeBundle <- function(bundleDir, bundlePath, verbose = FALSE) {
 
   utils::tar(bundlePath, files = NULL, compression = "gzip", tar = tarImplementation)
 }
+
+
+getTarImplementation <- function() {
+  # Check the rsconnect.tar option first. If that is unset, check the
+  # RSCONNECT_TAR environment var. If neither are set, use "internal".
+  tarImplementation <- getOption("rsconnect.tar", default = NA)
+  if (is.na(tarImplementation) || !nzchar(tarImplementation)) {
+    tarImplementation <- Sys.getenv("RSCONNECT_TAR", unset = NA)
+  }
+  if (is.na(tarImplementation) || !nzchar(tarImplementation)) {
+    tarImplementation <- "internal"
+  }
+  return(tarImplementation)
+}
+
 
 # uname/grname is not always available.
 # https://github.com/wch/r-source/blob/8cf68878a1361d00ff2125db2e1ac7dc8f6c8009/src/library/utils/R/tar.R#L539-L549
@@ -376,7 +356,8 @@ detectLongNames <- function(bundleDir, lengthLimit = 32) {
       warning("The bundle contains files with user/group names having more than ", lengthLimit,
               " characters: ", f, " is owned by ", info$uname, ":", info$grname, ". ",
               "Long user and group names cause the internal R tar implementation to produce invalid archives. ",
-              "Set the RSCONNECT_TAR environment variable to use an external tar command.")
+              "Set the rsconnect.tar option or the RSCONNECT_TAR environment variable to the path to ",
+              "a tar executable to use that implementation.")
       return(invisible(TRUE))
     }
   }
@@ -386,34 +367,39 @@ detectLongNames <- function(bundleDir, lengthLimit = 32) {
 
 #' Create a manifest.json describing deployment requirements.
 #'
-#' Given a directory content targeted for deployment, write a manifest.json
-#' into that directory describing the deployment requirements for that
-#' content.
+#' Given a directory content targeted for deployment, write a manifest.json into
+#' that directory describing the deployment requirements for that content.
 #'
-#' @param appDir Directory containing the content (Shiny application, R
-#'   Markdown document, etc).
+#' @param appDir Directory containing the content (Shiny application, R Markdown
+#'   document, etc).
 #'
 #' @param appFiles Optional. The full set of files and directories to be
 #'   included in future deployments of this content. Used when computing
-#'   dependency requirements. When `NULL`, all files in `appDir` are
-#'   considered.
+#'   dependency requirements. When `NULL`, all files in `appDir` are considered.
 #'
 #' @param appPrimaryDoc Optional. Specifies the primary document in a content
 #'   directory containing more than one. If `NULL`, the primary document is
 #'   inferred from the file list.
 #'
-#' @param contentCategory Optional. Specifies the kind of content being
-#'   deployed (e.g. `"plot"` or `"site"`).
+#' @param contentCategory Optional. Specifies the kind of content being deployed
+#'   (e.g. `"plot"` or `"site"`).
 #'
-#' @param python Full path to a python binary for use by `reticulate`.
-#'   The specified python binary will be invoked to determine its version
-#'   and to list the python packages installed in the environment.
-#'   If python = NULL, and RETICULATE_PYTHON is set in the environment,
-#'   its value will be used.
+#' @param python Optional. Full path to a Python binary for use by `reticulate`.
+#'   The specified Python binary will be invoked to determine its version and to
+#'   list the Python packages installed in the environment. If `python = NULL`,
+#'   and `RETICULATE_PYTHON` is set in the environment, its value will be used.
 #'
 #' @param forceGeneratePythonEnvironment Optional. If an existing
-#'   `requirements.txt` file is found, it will be overwritten when
-#'   this argument is `TRUE`.
+#'   `requirements.txt` file is found, it will be overwritten when this argument
+#'   is `TRUE`.
+#'
+#' @param quarto Optional. Full path to a Quarto binary for use deploying Quarto
+#'   content. The provided Quarto binary will be used to run `quarto inspect`
+#'   to gather information about the content.
+#'
+#' @param image Optional. The name of the image to use when building and
+#'   executing this content. If none is provided, RStudio Connect will
+#'   attempt to choose an image based on the content requirements.
 #'
 #' @param verbose If TRUE, prints progress messages to the console
 #'
@@ -425,6 +411,8 @@ writeManifest <- function(appDir = getwd(),
                           contentCategory = NULL,
                           python = NULL,
                           forceGeneratePythonEnvironment = FALSE,
+                          quarto = NULL,
+                          image = NULL,
                           verbose = FALSE) {
 
   condaMode <- FALSE
@@ -435,11 +423,18 @@ writeManifest <- function(appDir = getwd(),
     appFiles <- explodeFiles(appDir, appFiles)
   }
 
+  quartoInfo <- inferQuartoInfo(
+    appDir = appDir,
+    appPrimaryDoc = appPrimaryDoc,
+    quarto = quarto,
+    metadata = list()
+  )
+
   appMode <- inferAppMode(
       appDir = appDir,
       appPrimaryDoc = appPrimaryDoc,
       files = appFiles,
-      quarto = NULL)
+      quartoInfo = quartoInfo)
   appPrimaryDoc <- inferAppPrimaryDoc(
       appPrimaryDoc = appPrimaryDoc,
       appFiles = appFiles,
@@ -449,7 +444,7 @@ writeManifest <- function(appDir = getwd(),
       appPrimaryDoc = appPrimaryDoc,
       appMode = appMode,
       contentCategory = contentCategory)
-  hasPythonRmd <- appHasPythonRmd(
+  documentsHavePython <- detectPythonInDocuments(
       appDir = appDir,
       files = appFiles)
 
@@ -474,10 +469,11 @@ writeManifest <- function(appDir = getwd(),
       condaMode = condaMode,
       forceGenerate = forceGeneratePythonEnvironment,
       python = python,
-      hasPythonRmd = hasPythonRmd,
+      documentsHavePython = documentsHavePython,
       retainPackratDirectory = FALSE,
-      quarto = NULL,
+      quartoInfo = quartoInfo,
       isShinyApps = FALSE,
+      image = image,
       verbose = verbose)
   manifestJson <- enc2utf8(toJSON(manifest, pretty = TRUE))
   manifestPath <- file.path(appDir, "manifest.json")
@@ -514,19 +510,19 @@ yamlFromRmd <- function(filename) {
   return(NULL)
 }
 
-rmdHasPythonBlock <- function(filename) {
+documentHasPythonChunk <- function(filename) {
   lines <- readLines(filename, warn = FALSE, encoding = "UTF-8")
   matches <- grep("`{python", lines, fixed = TRUE)
   return (length(matches) > 0)
 }
 
-appHasPythonRmd <- function(appDir, files) {
+detectPythonInDocuments <- function(appDir, files) {
   rmdFiles <- grep("^[^/\\\\]+\\.[rq]md$", files, ignore.case = TRUE, perl = TRUE,
                    value = TRUE)
 
   if (length(rmdFiles) > 0) {
     for (rmdFile in rmdFiles) {
-      if (rmdHasPythonBlock(file.path(appDir, rmdFile))) {
+      if (documentHasPythonChunk(file.path(appDir, rmdFile))) {
         return(TRUE)
       }
     }
@@ -588,7 +584,7 @@ isShinyRmd <- function(filename) {
 
 # infer the mode of the application from its layout
 # unless we're an API, in which case, we're API mode.
-inferAppMode <- function(appDir, appPrimaryDoc, files, quarto) {
+inferAppMode <- function(appDir, appPrimaryDoc, files, quartoInfo) {
   # plumber API
   plumberFiles <- grep("^(plumber|entrypoint).r$", files, ignore.case = TRUE, perl = TRUE)
   if (length(plumberFiles) > 0) {
@@ -613,7 +609,7 @@ inferAppMode <- function(appDir, appPrimaryDoc, files, quarto) {
 
   # An Rmd file with a Shiny runtime uses rmarkdown::run.
   if (any(shinyRmdFiles)) {
-    if (is.null(quarto)) {
+    if (is.null(quartoInfo)) {
       return("rmd-shiny")
     } else {
       return("quarto-shiny")
@@ -630,7 +626,7 @@ inferAppMode <- function(appDir, appPrimaryDoc, files, quarto) {
 
   # Any non-Shiny R Markdown documents are rendered content (rmd-static).
   if (length(rmdFiles) > 0) {
-    if (is.null(quarto)) {
+    if (is.null(quartoInfo)) {
       return("rmd-static")
     } else {
       return("quarto-static")
@@ -686,7 +682,7 @@ inferAppPrimaryDoc <- function(appPrimaryDoc, appFiles, appMode) {
 }
 
 ## check for extra dependencies congruent to application mode
-inferDependencies <- function(appMode, hasParameters, python, hasPythonRmd, quarto) {
+inferRPackageDependencies <- function(appMode, hasParameters, documentsHavePython, quartoInfo) {
   deps <- c()
   if (appMode == "rmd-static") {
     if (hasParameters) {
@@ -695,11 +691,9 @@ inferDependencies <- function(appMode, hasParameters, python, hasPythonRmd, quar
     }
     deps <- c(deps, "rmarkdown")
   }
-  if (appMode == "quarto-static") {
+  if (appMode == "quarto-static" && appUsesR(quartoInfo)) {
     # Quarto documents need R when the knitr execution engine is used, not always.
-    if (!is.null(quarto) && "knitr" %in% quarto[["engines"]]) {
-        deps <- c(deps, "rmarkdown")
-    }
+    deps <- c(deps, "rmarkdown")
   }
   if (appMode == "quarto-shiny") {
     # Quarto Shiny documents are executed with rmarkdown::run
@@ -714,7 +708,7 @@ inferDependencies <- function(appMode, hasParameters, python, hasPythonRmd, quar
   if (appMode == "api") {
     deps <- c(deps, "plumber")
   }
-  if (hasPythonRmd) {
+  if (documentsHavePython && appUsesR(quartoInfo)) {
     deps <- c(deps, "reticulate")
   }
   unique(deps)
@@ -788,10 +782,11 @@ inferPythonEnv <- function(workdir, python, condaMode, forceGenerate) {
 
 createAppManifest <- function(appDir, appMode, contentCategory, hasParameters,
                               appPrimaryDoc, assetTypeName, users, condaMode,
-                              forceGenerate, python = NULL, hasPythonRmd = FALSE,
+                              forceGenerate, python = NULL, documentsHavePython = FALSE,
                               retainPackratDirectory = TRUE,
-                              quarto = NULL,
+                              quartoInfo = NULL,
                               isShinyApps = FALSE,
+                              image = NULL,
                               verbose = FALSE) {
 
   # provide package entries for all dependencies
@@ -808,27 +803,27 @@ createAppManifest <- function(appDir, appMode, contentCategory, hasParameters,
       !identical(appMode, "tensorflow-saved-model")) {
 
     # detect dependencies including inferred dependencies
-    inferredDependencies <- inferDependencies(appMode, hasParameters, python, hasPythonRmd, quarto)
-    deps = snapshotDependencies(appDir, inferredDependencies, verbose = verbose)
+    inferredRDependencies <- inferRPackageDependencies(
+      appMode = appMode,
+      hasParameters = hasParameters,
+      documentsHavePython = documentsHavePython,
+      quartoInfo = quartoInfo
+    )
+
+    # Skip snapshotting R dependencies if an app does not use R. Some
+    # dependencies seem to be found based on the presence of Bioconductor
+    # packages in the user's environment.
+    if (appUsesR(quartoInfo)) {
+      deps <- snapshotRDependencies(appDir, inferredRDependencies, verbose = verbose)
+    } else {
+      deps <- data.frame()
+    }
 
     # construct package list from dependencies
 
     logger <- verboseLogger(verbose)
     for (i in seq_len(nrow(deps))) {
       name <- deps[i, "Package"]
-
-      if (name == "reticulate" && !is.null(python)) {
-        pyInfo <- inferPythonEnv(appDir, python, condaMode, forceGenerate)
-        if (is.null(pyInfo$error)) {
-          # write the package list into requirements.txt/environment.yml file in the bundle dir
-          packageFile <- file.path(appDir, pyInfo$package_manager$package_file)
-          cat(pyInfo$package_manager$contents, file=packageFile, sep="\n")
-          pyInfo$package_manager$contents <- NULL
-        }
-        else {
-          errorMessages <- c(errorMessages, paste("Error detecting python for reticulate:", pyInfo$error))
-        }
-      }
 
       # get package info
       info <- as.list(deps[i, c('Source', 'Repository')])
@@ -858,18 +853,42 @@ createAppManifest <- function(appDir, appMode, contentCategory, hasParameters,
     }
   }
   if (length(packageMessages)) {
-    # Advice to help resolve installed packages that are not available using the current set of
-    # configured repositories. Each package with a missing repository has already been printed (see
-    # snapshotDependencies).
+    # Advice to help resolve installed packages that are not available using the
+    # current set of configured repositories. Each package with a missing
+    # repository has already been printed (see snapshotDependencizes).
     #
-    # This situation used to trigger an error (halting deployment), but was softened because:
-    #   * CRAN-archived packages are not visible to our available.packages scanning.
-    #   * Source-installed packages may be available after a manual server-side installation.
+    # This situation used to trigger an error (halting deployment), but was
+    # softened because:
+    #   * CRAN-archived packages are not visible to our available.packages
+    #     scanning.
+    #   * Source-installed packages may be available after a manual server-side
+    #     installation.
     #
-    # That said, an incorrectly configured "repos" option is almost always the cause.
+    # That said, an incorrectly configured "repos" option is almost always the
+    # cause.
     packageMessages <- c(packageMessages,
-                         "Unable to determine the source location for some packages. Packages should be installed from a package repository like CRAN or a version control system. Check that options('repos') refers to a package repository containing the needed package versions.")
+                         paste0(
+                           "Unable to determine the source location for some packages. ",
+                           "Packages should be installed from a package repository like ",
+                           "CRAN or a version control system. Check that ",
+                           "options('repos') refers to a package repository containing ",
+                           "the needed package versions."
+                         ))
     warning(paste(formatUL(packageMessages, '\n*'), collapse = '\n'), call. = FALSE, immediate. = TRUE)
+  }
+
+  needsPyInfo <- appUsesPython(quartoInfo) || "reticulate" %in% names(packages)
+  if (needsPyInfo && !is.null(python)) {
+    pyInfo <- inferPythonEnv(appDir, python, condaMode, forceGenerate)
+    if (is.null(pyInfo$error)) {
+      # write the package list into requirements.txt/environment.yml file in the bundle dir
+      packageFile <- file.path(appDir, pyInfo$package_manager$package_file)
+      cat(pyInfo$package_manager$contents, file=packageFile, sep="\n")
+      pyInfo$package_manager$contents <- NULL
+    }
+    else {
+      errorMessages <- c(errorMessages, paste("Error detecting python environment:", pyInfo$error))
+    }
   }
 
   if (length(errorMessages)) {
@@ -929,11 +948,16 @@ createAppManifest <- function(appDir, appMode, contentCategory, hasParameters,
   # add metadata
   manifest$metadata <- metadata
 
-  # indicate whether this is a quarto app/doc
-  if (!is.null(quarto) && !isShinyApps) {
-    manifest$quarto <- quarto
+  # if there is a target image, attach it to the environment
+  if (!is.null(image)) {
+    manifest$environment <- list(image = image)
   }
-  # if there is python info for reticulate, attach it
+
+  # indicate whether this is a quarto app/doc
+  if (!is.null(quartoInfo) && !isShinyApps) {
+    manifest$quarto <- quartoInfo
+  }
+  # if there is python info for reticulate or Quarto, attach it
   if (!is.null(pyInfo)) {
     manifest$python <- pyInfo
   }
@@ -1162,3 +1186,71 @@ performPackratSnapshot <- function(bundleDir, verbose = FALSE) {
   # TRUE just to indicate success
   TRUE
 }
+
+# Run "quarto inspect" on the target and returns its output as a parsed object.
+quartoInspect <- function(appDir = NULL, appPrimaryDoc = NULL, quarto = NULL) {
+  if (!is.null(quarto)) {
+    inspect <- NULL
+    # If "quarto inspect appDir" fails, we will try "quarto inspect
+    # appPrimaryDoc", so that we can support single files as well as projects.
+    primaryDocPath <- file.path(appDir, appPrimaryDoc) # prior art: appHasParameters()
+    for (path in c(appDir, primaryDocPath)) {
+      args <- c("inspect", path.expand(path))
+      inspect <- suppressWarnings(system2(quarto, args, stdout = TRUE, stderr = FALSE))
+      if (is.null(attr(inspect, "status"))) {
+        return(jsonlite::fromJSON(inspect))
+      }
+    }
+  }
+  return(NULL)
+}
+
+# Attempt to gather Quarto version and engines, first from quarto inspect if a
+# quarto executable is provided, and then from metadata.
+inferQuartoInfo <- function(appDir, appPrimaryDoc, quarto, metadata) {
+  quartoInfo <- NULL
+  if (!is.null(metadata$quarto_version)) {
+    # Prefer metadata, because that means someone already ran quarto inspect
+    quartoInfo <- list(
+      "version" = metadata[["quarto_version"]],
+      "engines" = metadata[["quarto_engines"]]
+    )
+  }
+  if (is.null(quartoInfo) && !is.null(quarto)) {
+    # If we don't yet have Quarto details, run quarto inspect ourselves
+    inspect <- quartoInspect(
+      appDir = appDir,
+      appPrimaryDoc = appPrimaryDoc,
+      quarto = quarto
+    )
+    if (!is.null(inspect)) {
+      quartoInfo <- list(
+        version = inspect[["quarto"]][["version"]],
+        engines = I(inspect[["engines"]])
+      )
+    }
+  }
+  return(quartoInfo)
+}
+
+appUsesR <- function(quartoInfo) {
+  if (is.null(quartoInfo)) {
+    # All non-Quarto content currently uses R by default.
+    # To support non-R content in rsconnect, we could inspect appmode here.
+    return(TRUE)
+  }
+  # R is used only supported with the "knitr" engine, not "jupyter" or "markdown"
+  # Technically, "jupyter" content could support R.
+  return("knitr" %in% quartoInfo[["engines"]])
+}
+
+appUsesPython <- function(quartoInfo) {
+  if (is.null(quartoInfo)) {
+    # No R-based, non-Quarto content uses Python by default.
+    # Looking for Python chunks in Rmd needs to happen separately.
+    return(FALSE)
+  }
+  # Python is a direct consequence of the "jupyter" engine; not "knitr" or "markdown".
+  return("jupyter" %in% quartoInfo[["engines"]])
+}
+
