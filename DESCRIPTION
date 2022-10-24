@@ -2,7 +2,7 @@ Package: rsconnect
 Type: Package
 Title: Deployment Interface for R Markdown Documents and Shiny
         Applications
-Version: 0.8.27
+Version: 0.8.28
 Authors@R: c(
     person("Aron", "Atkins", role = c("aut", "cre"), email = "aron@rstudio.com"),
     person("Jonathan", "McPherson", role = "aut", email = "jonathan@rstudio.com"),
@@ -20,15 +20,15 @@ Suggests: MASS, RCurl, callr, httpuv, knitr, plumber (>= 0.3.2),
         xtable
 License: GPL-2
 Encoding: UTF-8
-RoxygenNote: 7.1.2
+RoxygenNote: 7.2.1
 URL: https://github.com/rstudio/rsconnect
 BugReports: https://github.com/rstudio/rsconnect/issues
 NeedsCompilation: no
-Packaged: 2022-07-12 16:34:47 UTC; aron
+Packaged: 2022-10-24 13:23:11 UTC; aron
 Author: Aron Atkins [aut, cre],
   Jonathan McPherson [aut],
   JJ Allaire [aut],
   RStudio [cph, fnd]
 Maintainer: Aron Atkins <aron@rstudio.com>
 Repository: CRAN
-Date/Publication: 2022-07-12 17:00:02 UTC
+Date/Publication: 2022-10-24 14:42:37 UTC

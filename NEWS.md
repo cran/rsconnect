@@ -1,5 +1,26 @@
 # NEWS
 
+## 0.8.28
+
+Released to CRAN on 2022-10-17
+
+* Shiny applications and Shiny documents no longer include an implicit
+  dependency on [`ragg`](https://ragg.r-lib.org) when that package is present
+  in the local environment. This reverts a change introduced in 0.8.27.
+  
+  Shiny applications should add an explicit dependency on `ragg` (usually with
+  a `library("ragg")` statement) to see it used by `shiny::renderPlot` (via
+  `shiny::plotPNG`).
+  
+  The documentation for `shiny::plotPNG` explains the use of `ragg`. (#598)
+
+* Fix bug that prevented publishing or writing manifests for non-Quarto content
+  when a Quarto path was provided to the `quarto` argument of `writeManifest()`,
+  `deployApp()`, and related functions.
+
+* Escape account names when performing a directory search to determine an
+  appropriate server. (#620)
+
 ## 0.8.27
 
 Released to CRAN on 2022-07-12
@@ -16,7 +37,7 @@ Released to CRAN on 2022-07-12
 * If the `ragg` package is installed locally, it is now added as an implicit
   dependency to `shiny` apps since `shiny::renderPlot()` now uses it by default 
   (when available). This way, `shiny` apps won't have to add `library(ragg)` to 
-  get consistent (higher-quality) PNG images when deployed. (#598)  
+  get consistent (higher-quality) PNG images when deployed. (#598)
 
 ## 0.8.26
 

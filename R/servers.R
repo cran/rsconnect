@@ -11,8 +11,7 @@
 #' The `servers` and `serverInfo` functions are provided for viewing
 #' previously registered servers.
 #'
-#' There is always at least one server registered (the `shinyapps.io`
-#' server)
+#' Servers for `shinyapps.io` and `rstudio.cloud` are always registered.
 #'
 #' @param name Optional nickname for the server. If none is given, the nickname
 #'   is inferred from the server's hostname.
@@ -63,7 +62,10 @@ servers <- function(local = FALSE) {
   if (local) {
     locals
   } else {
-    rbind(locals, as.data.frame(shinyappsServerInfo(), stringsAsFactors = FALSE))
+    rbind(
+      locals,
+      as.data.frame(shinyappsServerInfo(), stringsAsFactors = FALSE),
+      as.data.frame(cloudServerInfo(), stringsAsFactors = FALSE))
   }
 }
 
@@ -78,6 +80,14 @@ serverConfigFile <- function(name) {
 
 shinyappsServerInfo <- function() {
   info <- list(name = "shinyapps.io",
+               certificate = inferCertificateContents(
+                 system.file("cert/shinyapps.io.pem", package = "rsconnect")),
+               url = getOption("rsconnect.shinyapps_url",
+                               "https://api.shinyapps.io/v1"))
+}
+
+cloudServerInfo <- function() {
+  info <- list(name = "rstudio.cloud",
                certificate = inferCertificateContents(
                  system.file("cert/shinyapps.io.pem", package = "rsconnect")),
                url = getOption("rsconnect.shinyapps_url",
@@ -218,6 +228,11 @@ serverInfo <- function(name) {
     return(shinyappsServerInfo())
   }
 
+  # there's no config file for rstudio.cloud
+  if (identical(name, "rstudio.cloud")) {
+    return(cloudServerInfo())
+  }
+
   configFile <- serverConfigFile(name)
   if (!file.exists(configFile))
     stop(missingServerErrorMessage(name))
@@ -254,22 +269,15 @@ missingServerErrorMessage <- function(name) {
 }
 
 clientForAccount <- function(account) {
-  authInfo <- account
 
   # determine appropriate server information for account
-  if (account$server == shinyappsServerInfo()$name) {
-    serverInfo <- shinyappsServerInfo()
-    constructor <- lucidClient
+  if (isCloudServer(account$server)) {
+    constructor <- lucidClientForAccount(account)
   } else {
     serverInfo <- serverInfo(account$server)
-    constructor <- connectClient
+    account$certificate <- serverInfo$certificate
+    connectClient(serverInfo$url, account)
   }
-
-  # promote certificate into auth info
-  authInfo$certificate <- serverInfo$certificate
-
-  # invoke client constructor
-  constructor(serverInfo$url, authInfo)
 }
 
 ensureConnectServerUrl <- function(url) {

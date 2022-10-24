@@ -219,6 +219,7 @@ connectUser <- function(account = NULL, server = NULL, quiet = FALSE,
 #' @param name Name of account to save or remove
 #' @param token User token for the account
 #' @param secret User secret for the account
+#' @param server Server to associate account with.
 #'
 #' @examples
 #' \dontrun{
@@ -232,7 +233,8 @@ connectUser <- function(account = NULL, server = NULL, quiet = FALSE,
 #'
 #' @family Account functions
 #' @export
-setAccountInfo <- function(name, token, secret) {
+setAccountInfo <- function(name, token, secret,
+                           server = 'shinyapps.io') {
 
   if (!isStringParam(name))
     stop(stringParamErrorMessage("name"))
@@ -244,10 +246,16 @@ setAccountInfo <- function(name, token, secret) {
     stop(stringParamErrorMessage("secret"))
 
   # create connect client
-  serverInfo <- shinyappsServerInfo()
-  authInfo <- list(token = token, secret = secret,
-                   certificate = serverInfo$certificate)
-  lucid <- lucidClient(serverInfo$url, authInfo)
+  if (identical(server, cloudServerInfo()$name)) {
+    serverInfo <- cloudServerInfo()
+  } else {
+    serverInfo <- shinyappsServerInfo()
+  }
+  authInfo <- list(token = token,
+                   secret = secret,
+                   certificate = serverInfo$certificate,
+                   server = serverInfo$name)
+  lucid <- lucidClientForAccount(authInfo)
 
   # get user Id
   userId <- lucid$currentUser()$id
@@ -434,8 +442,9 @@ accountConfigFile <- function(name, server = NULL) {
   # if no server is specified, try to find an account with the given name
   # associated with any server
   if (is.null(server)) {
-    return(list.files(accountsConfigDir(), pattern = paste0(name, ".dcf"),
-                      recursive = TRUE, full.names = TRUE))
+    pat <- escapeRegex(paste0(name, ".dcf"))
+    return(normalizePath(list.files(accountsConfigDir(), pattern = pat,
+                                    recursive = TRUE, full.names = TRUE)))
   }
   normalizePath(file.path(accountsConfigDir(), server,
                           paste(name, ".dcf", sep="")),
@@ -476,7 +485,11 @@ resolveAccount <- function(account, server = NULL) {
   }
 }
 
-isShinyapps <- function(server) {
+isCloudServer <- function(server) {
+  identical(server, "shinyapps.io") || identical(server, "rstudio.cloud")
+}
+
+isShinyappsServer <- function(server) {
   identical(server, "shinyapps.io")
 }
 
@@ -486,7 +499,7 @@ isRPubs <- function(server) {
 
 isConnectInfo <- function(accountInfo = NULL, server = NULL) {
   host <- if (is.null(accountInfo)) server else accountInfo$server
-  !isShinyapps(host) && !isRPubs(host)
+  !isCloudServer(host) && !isRPubs(host)
 }
 
 stopWithNoAccount <- function() {

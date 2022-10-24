@@ -387,7 +387,7 @@ isShinyRmd <- function(filename) {
 
 # infer the mode of the application from its layout
 # unless we're an API, in which case, we're API mode.
-inferAppMode <- function(appDir, appPrimaryDoc, files, quartoInfo) {
+inferAppMode <- function(appDir, appPrimaryDoc, files, quartoInfo, isCloudServer = FALSE) {
   # plumber API
   plumberFiles <- grep("^(plumber|entrypoint).r$", files, ignore.case = TRUE, perl = TRUE)
   if (length(plumberFiles) > 0) {
@@ -456,6 +456,12 @@ inferAppMode <- function(appDir, appPrimaryDoc, files, quartoInfo) {
     if (!is.null(quartoInfo)) {
       return("quarto-static")
     } else {
+      # For Shinyapps and rstudio.cloud, treat "rmd-static" app mode as "rmd-shiny" so that
+      # they can be served from a shiny process in Connect until we have better support of
+      # rmarkdown static content
+      if (isCloudServer) {
+        return("rmd-shiny")
+      }
       return("rmd-static")
     }
   }
@@ -526,13 +532,13 @@ inferRPackageDependencies <- function(appMode, hasParameters, documentsHavePytho
   }
   if (appMode == "quarto-shiny") {
     # Quarto Shiny documents are executed with rmarkdown::run
-    deps <- c(deps, "rmarkdown", shinyDeps())
+    deps <- c(deps, "rmarkdown", "shiny")
   }
   if (appMode == "rmd-shiny") {
-    deps <- c(deps, "rmarkdown", shinyDeps())
+    deps <- c(deps, "rmarkdown", "shiny")
   }
   if (appMode == "shiny") {
-    deps <- c(deps, shinyDeps())
+    deps <- c(deps, "shiny")
   }
   if (appMode == "api") {
     deps <- c(deps, "plumber")
@@ -541,15 +547,6 @@ inferRPackageDependencies <- function(appMode, hasParameters, documentsHavePytho
     deps <- c(deps, "reticulate")
   }
   unique(deps)
-}
-
-# With shiny v1.7.2 or higher, renderPlot() defaults to ragg for png rendering
-# (if it's installed), so include it if it's installed locally (this way users
-# will get consistent PNG results without needing to add library(ragg) to the
-# app). https://github.com/rstudio/shiny/pull/3654
-shinyDeps <- function() {
-  include_ragg <- isAvailable("ragg") && isAvailable("shiny", "1.7.1.9000")
-  c("shiny", if (include_ragg) "ragg")
 }
 
 isWindows <- function() {
@@ -634,7 +631,7 @@ createAppManifest <- function(appDir, appMode, contentCategory, hasParameters,
                               forceGenerate, python = NULL, documentsHavePython = FALSE,
                               retainPackratDirectory = TRUE,
                               quartoInfo = NULL,
-                              isShinyApps = FALSE,
+                              isCloud = FALSE,
                               image = NULL,
                               verbose = FALSE) {
 
@@ -803,7 +800,7 @@ createAppManifest <- function(appDir, appMode, contentCategory, hasParameters,
   }
 
   # indicate whether this is a quarto app/doc
-  if (!is.null(quartoInfo) && !isShinyApps) {
+  if (!is.null(quartoInfo) && !isCloud) {
     manifest$quarto <- quartoInfo
   }
   # if there is python info for reticulate or Quarto, attach it
@@ -923,20 +920,25 @@ explodeFiles <- function(dir, files) {
 
 # Run "quarto inspect" on the target and returns its output as a parsed object.
 quartoInspect <- function(appDir = NULL, appPrimaryDoc = NULL, quarto = NULL) {
-  if (!is.null(quarto)) {
-    inspect <- NULL
-    # If "quarto inspect appDir" fails, we will try "quarto inspect
-    # appPrimaryDoc", so that we can support single files as well as projects.
-    primaryDocPath <- file.path(appDir, appPrimaryDoc) # prior art: appHasParameters()
-    for (path in c(appDir, primaryDocPath)) {
-      args <- c("inspect", path.expand(path))
-      inspect <- suppressWarnings(system2(quarto, args, stdout = TRUE, stderr = FALSE))
-      if (is.null(attr(inspect, "status"))) {
-        return(jsonlite::fromJSON(inspect))
-      }
-    }
+  if (is.null(quarto)) {
+    return(NULL)
   }
-  return(NULL)
+  inspect <- NULL
+  # If "quarto inspect appDir" fails, we will try "quarto inspect
+  # appPrimaryDoc", so that we can support single files as well as projects.
+  primaryDocPath <- file.path(appDir, appPrimaryDoc) # prior art: appHasParameters()
+  for (path in c(appDir, primaryDocPath)) {
+    args <- c("inspect", path.expand(path))
+    tryCatch(
+      {
+        inspectOutput <- suppressWarnings(system2(quarto, args, stdout = TRUE, stderr = TRUE))
+        inspect <- jsonlite::fromJSON(inspectOutput)
+      },
+      error = function(e) e
+    )
+    if (!is.null(inspect)) break
+  }
+  return(inspect)
 }
 
 # Attempt to gather Quarto version and engines, first from quarto inspect if a
