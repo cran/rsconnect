@@ -31,7 +31,7 @@
 #'   to gather information about the content.
 #'
 #' @param image Optional. The name of the image to use when building and
-#'   executing this content. If none is provided, RStudio Connect will
+#'   executing this content. If none is provided, Posit Connect will
 #'   attempt to choose an image based on the content requirements.
 #'
 #' @param verbose If TRUE, prints progress messages to the console
@@ -117,7 +117,7 @@ writeManifest <- function(appDir = getwd(),
   if (is.null(requirementsFilename)) { requirementsFilename <- "requirements.txt" }
   srcRequirementsFile <- file.path(bundleDir, requirementsFilename)
   dstRequirementsFile <- file.path(appDir, requirementsFilename)
-  if(file.exists(srcRequirementsFile) && !file.exists(dstRequirementsFile)) {
+  if (file.exists(srcRequirementsFile) && !file.exists(dstRequirementsFile)) {
     file.copy(srcRequirementsFile, dstRequirementsFile)
   }
   invisible()

@@ -40,7 +40,7 @@
 #' @param upload If `TRUE` (the default) then the application is uploaded from
 #'   the local system prior to deployment. If `FALSE` then it is re-deployed
 #'   using the last version that was uploaded. `FALSE` is only supported on
-#'   shinyapps.io; `TRUE` is required on RStudio Connect.
+#'   shinyapps.io; `TRUE` is required on Posit Connect.
 #' @param recordDir Directory where publish record is written. Can be `NULL`
 #'   in which case record will be written to the location specified with `appDir`.
 #' @param launch.browser If true, the system's default web browser will be
@@ -76,7 +76,7 @@
 #'   visibility of the deployment. When `NULL`, no change to visibility is
 #'   made. Currently has an effect only on deployments to shinyapps.io.
 #' @param image Optional. The name of the image to use when building and
-#'   executing this content. If none is provided, RStudio Connect will
+#'   executing this content. If none is provided, Posit Connect will
 #'   attempt to choose an image based on the content requirements.
 #' @examples
 #' \dontrun{
@@ -341,25 +341,25 @@ deployApp <- function(appDir = getwd(),
     if (isShinyappsServer(accountDetails$server)) {
       if (identical(contentCategory, "api")) {
         stop("Plumber APIs are not currently supported on shinyapps.io; they ",
-             "can only be published to RStudio Connect or rstudio.cloud.")
+             "can only be published to Posit Connect or Posit Cloud.")
       }
     }
   } else {
     if (identical(upload, FALSE)) {
       # it is not possible to deploy to Connect without uploading
-      stop("RStudio Connect does not support deploying without uploading. ",
+      stop("Posit Connect does not support deploying without uploading. ",
            "Specify upload=TRUE to upload and re-deploy your application.")
     }
   }
 
   client <- clientForAccount(accountDetails)
-  if(verbose){
+  if (verbose) {
     urlstr <- serverInfo(accountDetails$server)$url
     url <- parseHttpUrl(urlstr)
     cat("Cookies:", "\n")
     host <- getCookieHost(url)
-    if (exists(host, .cookieStore)){
-      print(get(host, envir=.cookieStore))
+    if (exists(host, .cookieStore)) {
+      print(get(host, envir = .cookieStore))
     } else {
       print("None")
     }
@@ -420,7 +420,7 @@ deployApp <- function(appDir = getwd(),
           timestampedLog("Upload complete")
 
         # Step 3. Upload revise bundle status.
-        response <- client$updateBundleStatus(bundle$id, status="ready")
+        response <- client$updateBundleStatus(bundle$id, status = "ready")
 
         # Step 4. Retrieve updated bundle post status change - which is required in subsequent
         # areas of the code below.
@@ -461,7 +461,7 @@ deployApp <- function(appDir = getwd(),
   if (length(bundle$id) > 0 && nzchar(bundle$id)) {
     displayStatus(paste0("Deploying bundle: ", bundle$id,
                          " for ", assetTypeName, ": ", application$id,
-                         " ...\n", sep=""))
+                         " ...\n", sep = ""))
   }
   if (verbose) {
     cat("----- Server deployment started at ", as.character(Sys.time()), " -----\n")
@@ -596,13 +596,12 @@ bundleApp <- function(appName, appDir, appFiles, appPrimaryDoc, assetTypeName,
 
 
 getPythonForTarget <- function(path, accountDetails) {
-  # python is enabled on Connect and rstudio.cloud, but not on Shinyapps
+  # python is enabled on Connect and posit.cloud, but not on Shinyapps
   targetIsShinyapps <- isShinyappsServer(accountDetails$server)
-  pythonEnabled = getOption("rsconnect.python.enabled", default=!targetIsShinyapps)
+  pythonEnabled <- getOption("rsconnect.python.enabled", default = !targetIsShinyapps)
   if (pythonEnabled) {
     getPython(path)
-  }
-  else {
+  } else {
     NULL
   }
 }
@@ -613,7 +612,7 @@ deploymentTarget <- function(appPath, appName, appTitle, appId, account,
                              server = NULL) {
 
   # read existing accounts
-  accounts <- accounts(server)[,"name"]
+  accounts <- accounts(server)[, "name"]
   if (length(accounts) == 0)
     stopWithNoAccount()
 
@@ -726,7 +725,7 @@ deploymentTarget <- function(appPath, appName, appTitle, appId, account,
   # based on the basename of the application directory
   else if (!is.null(account) || !is.null(server)) {
     if (is.null(account)) {
-      account <- accounts(server)[,"name"]
+      account <- accounts(server)[, "name"]
       if (length(account) > 1) {
         stopWithSpecifyAccount()
       }
@@ -827,7 +826,7 @@ applicationForTarget <- function(client, accountInfo, target, forceUpdate) {
   # is an application of that name already deployed then confirm
   if (!is.null(target$appId) && !is.null(app) && interactive() && !forceUpdate) {
     prompt <- paste("Update application currently deployed at\n", app$url,
-                    "? [Y/n] ", sep="")
+                    "? [Y/n] ", sep = "")
     input <- readline(prompt)
     if (nzchar(input) && !identical(input, "y") && !identical(input, "Y"))
       stop("Application deployment cancelled", call. = FALSE)
@@ -844,7 +843,7 @@ applicationForTarget <- function(client, accountInfo, target, forceUpdate) {
 }
 
 validURL <- function(url) {
-  !(is.null(url) || url == '')
+  !(is.null(url) || url == "")
 }
 
 openURL <- function(client, application, launch.browser, on.failure, deploymentSucceeded) {

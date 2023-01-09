@@ -11,9 +11,10 @@ status](https://www.r-pkg.org/badges/version/rsconnect)](https://cran.r-project.
 [![R-CMD-check](https://github.com/rstudio/rsconnect/workflows/R-CMD-check/badge.svg)](https://github.com/rstudio/rsconnect/actions)
 <!-- badges: end -->
 
-An R package used for deploying applications to the
-[ShinyApps](https://www.shinyapps.io/) hosted service, or to [RStudio
-Connect](https://www.rstudio.com/products/connect/).
+An R package used for deploying applications to [Posit
+Connect](https://posit.co/products/enterprise/connect/),
+[ShinyApps.io](https://www.shinyapps.io/), and [Posit
+Cloud](https://posit.cloud/).
 
 ## Installation
 
@@ -36,10 +37,16 @@ devtools::install_github("rstudio/rsconnect")
 To get started using ShinyApps check out the [Getting Started
 Guide](https://shiny.rstudio.com/articles/shinyapps.html).
 
-For more information using RStudio Connect, see the [RStudio Connect
-User Guide](https://docs.rstudio.com/connect/user/index.html).
+For more information using Posit Connect, see the [Posit Connect User
+Guide](https://docs.posit.co/connect/user/index.html).
+
+Publishing to Posit Cloud is currently in closed beta and requires
+access to an enabled account on Posit Cloud. Premium, Instructor, and
+Organization account holders can request to participate. See [Posit
+Cloud’s Announcement](https://posit.cloud/learn/whats-new#publishing)
+for more information and to request access.
 
 ## Legal Stuff
 
 TensorFlow, the TensorFlow logo and any related marks are trademarks of
-Google Inc., and are not affiliated with RStudio, Inc.
+Google Inc., and are not affiliated with Posit Software, PBC
