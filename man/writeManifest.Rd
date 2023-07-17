@@ -2,55 +2,75 @@
 % Please edit documentation in R/writeManifest.R
 \name{writeManifest}
 \alias{writeManifest}
-\title{Create a manifest.json describing deployment requirements.}
+\title{Create a \code{manifest.json}}
 \usage{
 writeManifest(
   appDir = getwd(),
   appFiles = NULL,
+  appFileManifest = NULL,
   appPrimaryDoc = NULL,
   contentCategory = NULL,
   python = NULL,
   forceGeneratePythonEnvironment = FALSE,
-  quarto = NULL,
+  quarto = NA,
   image = NULL,
-  verbose = FALSE
+  verbose = FALSE,
+  quiet = FALSE
 )
 }
 \arguments{
-\item{appDir}{Directory containing the content (Shiny application, R Markdown
-document, etc).}
+\item{appDir}{A directory containing an application (e.g. a Shiny app
+or plumber API). Defaults to the current directory.}
 
-\item{appFiles}{Optional. The full set of files and directories to be
-included in future deployments of this content. Used when computing
-dependency requirements. When \code{NULL}, all files in \code{appDir} are considered.}
+\item{appFiles, appFileManifest}{Use \code{appFiles} to specify a
+character vector of files to bundle in the app or \code{appManifestFiles}
+to provide a path to a file containing a list of such files. If neither
+are supplied, will bundle all files in \code{appDir}, apart from standard
+exclusions and files listed in a \code{.rscignore} file. See
+\code{\link[=listDeploymentFiles]{listDeploymentFiles()}} for more details.}
 
-\item{appPrimaryDoc}{Optional. Specifies the primary document in a content
-directory containing more than one. If \code{NULL}, the primary document is
-inferred from the file list.}
+\item{appPrimaryDoc}{If the application contains more than one document, this
+parameter indicates the primary one, as a path relative to \code{appDir}. Can be
+\code{NULL}, in which case the primary document is inferred from the contents
+being deployed.}
 
-\item{contentCategory}{Optional. Specifies the kind of content being deployed
-(e.g. \code{"plot"} or \code{"site"}).}
+\item{contentCategory}{Set this to \code{"site"} if you'd deploy with
+\code{\link[=deploySite]{deploySite()}}; otherwise leave as is.}
 
-\item{python}{Optional. Full path to a Python binary for use by \code{reticulate}.
-The specified Python binary will be invoked to determine its version and to
-list the Python packages installed in the environment. If \code{python = NULL},
-and \code{RETICULATE_PYTHON} is set in the environment, its value will be used.}
+\item{python}{Full path to a python binary for use by \code{reticulate}.
+Required if \code{reticulate} is a dependency of the app being deployed.
+If python = NULL, and RETICULATE_PYTHON or RETICULATE_PYTHON_FALLBACK is
+set in the environment, its value will be used. The specified python binary
+will be invoked to determine its version and to list the python packages
+installed in the environment.}
 
 \item{forceGeneratePythonEnvironment}{Optional. If an existing
 \code{requirements.txt} file is found, it will be overwritten when this argument
 is \code{TRUE}.}
 
-\item{quarto}{Optional. Full path to a Quarto binary for use deploying Quarto
-content. The provided Quarto binary will be used to run \verb{quarto inspect}
-to gather information about the content.}
+\item{quarto}{Should the deployed content be built by quarto?
+(\code{TRUE}, \code{FALSE}, or \code{NA}). The default, \code{NA}, will use quarto if
+there are \code{.qmd} files in the bundle, or if there is a
+\verb{_quarto.yml} and \code{.Rmd} files.
+
+(This option is ignored and quarto will always be used if the
+\code{metadata} contains \code{quarto_version} and \code{quarto_engines} fields.)}
 
 \item{image}{Optional. The name of the image to use when building and
 executing this content. If none is provided, Posit Connect will
 attempt to choose an image based on the content requirements.}
 
-\item{verbose}{If TRUE, prints progress messages to the console}
+\item{verbose}{If \code{TRUE}, prints detailed progress messages.}
+
+\item{quiet}{If \code{FALSE}, prints progress messages.}
 }
 \description{
-Given a directory content targeted for deployment, write a manifest.json into
-that directory describing the deployment requirements for that content.
+Use \code{writeManifest()} to generate a \code{manifest.json}. Among other things,
+you can commit this file to git to activate
+\href{https://docs.posit.co/connect/user/git-backed/}{Git-Backed content}
+for Posit Connect.
+
+\code{manifest.json} contains a list of all files in the app along with their
+dependencies, so you will need to re-run \code{writeManifest()} when either of
+these change.
 }

@@ -20,15 +20,17 @@
 #' @note This function works only for ShinyApps servers.
 #' @export
 restartApp <- function(appName, account = NULL, server = NULL, quiet = FALSE) {
+  accountDetails <- accountInfo(account, server)
+  checkShinyappsServer(accountDetails$server)
 
   # define deploy task
   taskDef <- list()
   taskDef$beginStatus <- "Restarting application"
   taskDef$endStatus <- "Application successfully restarted"
   taskDef$action <- function(client, application) {
-    client$deployApplication(application$id)
+    client$deployApplication(application)
   }
 
   # perform it
-  applicationTask(taskDef, appName, account, server, quiet)
+  applicationTask(taskDef, appName, accountDetails, quiet)
 }

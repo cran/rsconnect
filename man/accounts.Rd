@@ -8,9 +8,9 @@
 \usage{
 accounts(server = NULL)
 
-accountInfo(name, server = NULL)
+accountInfo(name = NULL, server = NULL)
 
-removeAccount(name, server = NULL)
+removeAccount(name = NULL, server = NULL)
 }
 \arguments{
 \item{server}{Name of the server on which the account is registered
@@ -38,7 +38,6 @@ previously registered accounts.
 \seealso{
 Other Account functions: 
 \code{\link{connectApiUser}()},
-\code{\link{connectUser}()},
 \code{\link{setAccountInfo}()}
 }
 \concept{Account functions}

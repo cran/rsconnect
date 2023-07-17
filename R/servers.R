@@ -1,35 +1,163 @@
-#' Server Management Functions
+#' Server metadata
 #'
-#' Functions to manage the list of known servers to which
-#' \pkg{rsconnect} can deploy and manage applications.
+#' `servers()` lists all known servers; `serverInfo()` gets metadata about
+#' a specific server. Cloud servers `shinyapps.io` and `posit.cloud` are always
+#' automatically registered and available.
 #'
-#' Register a server with `addServer` or `discoverServers` (the latter
-#' is useful only if your administrator has configured server autodiscovery).
-#' Once a server is registered, you can connect to an account on the server
-#' using [connectUser()].
-#'
-#' The `servers` and `serverInfo` functions are provided for viewing
-#' previously registered servers.
-#'
-#' Servers for `shinyapps.io` and `posit.cloud` are always registered.
-#'
-#' @param name Optional nickname for the server. If none is given, the nickname
-#'   is inferred from the server's hostname.
-#' @param url Server's URL. Should look like `http://servername/` or
-#'  `http://servername:port/`.
-#' @param local Return only local servers (i.e. not `shinyapps.io`)
-#' @param certificate Optional; a path a certificate file to be used when making
-#'   SSL connections to the server. The file's contents are copied and stored by
-#'   the \pkg{rsconnect} package. Can also be a character vector containing the
-#'   certificate's contents.
-#' @param quiet Suppress output and prompts where possible.
+#' @param name Server name. If omitted, you'll be prompted to pick a server.
+#' @param local Return only local servers? (i.e. not automatically registered
+#'   cloud servers)
 #' @return
-#' `servers` returns a data frame with registered server names and URLs.
-#' `serverInfo` returns a list with details for a particular server.
+#' `servers()` returns a data frame with registered server names and URLs.
+#' `serverInfo()` returns a list with details for a particular server.
+#' @export
+#' @examples
+#' # List all registered servers
+#' servers()
+#'
+#' # Get information about a server
+#' serverInfo("posit.cloud")
+servers <- function(local = FALSE) {
+  servers <- serverNames(local)
+
+  info <- lapply(servers, serverInfo)
+  info <- lapply(info, as.data.frame, stringsAsFactors = FALSE)
+
+  out <- rbind_fill(info, c("name", "url", "certificate"))
+  out$certificate <- secret(out$certificate)
+  out
+}
+
 #' @rdname servers
+#' @export
+serverInfo <- function(name = NULL) {
+  name <- findServer(name, local = FALSE)
+
+  if (isPositCloudServer(name)) {
+    info <- cloudServerInfo(name, "https://api.posit.cloud/v1")
+  } else if (isShinyappsServer(name)) {
+    info <- cloudServerInfo(name, "https://api.shinyapps.io/v1")
+  } else {
+    configFile <- serverConfigFile(name)
+    serverDcf <- read.dcf(serverConfigFile(name), all = TRUE)
+    info <- as.list(serverDcf)
+  }
+
+  info$certificate <- secret(info$certificate)
+  info
+}
+
+serverNames <- function(local = FALSE) {
+  names <- gsub("\\.dcf$", "", basename(serverConfigFiles()))
+  if (!local) {
+    names <- c(names, "shinyapps.io", "posit.cloud")
+
+    if (nrow(accounts(server = "rstudio.cloud")) > 0) {
+      names <- c(names, "rstudio.cloud")
+    }
+  }
+
+  names
+}
+
+isShinyappsServer <- function(server) {
+  identical(server, "shinyapps.io")
+}
+
+isPositCloudServer <- function(server) {
+  server %in% c("posit.cloud", "rstudio.cloud")
+}
+
+isCloudServer <- function(server) {
+  isPositCloudServer(server) || isShinyappsServer(server)
+}
+
+checkCloudServer <- function(server, call = caller_env()) {
+  if (!isCloudServer(server)) {
+    cli::cli_abort("`server` must be shinyapps.io or posit.cloud", call = call)
+  }
+}
+
+checkShinyappsServer <- function(server, call = caller_env()) {
+  if (!isShinyappsServer(server)) {
+    cli::cli_abort("`server` must be shinyapps.io", call = call)
+  }
+}
+
+isRPubs <- function(server) {
+  identical(server, "rpubs.com")
+}
+
+isConnectServer <- function(server) {
+  !isCloudServer(server) && !isRPubs(server)
+}
+
+cloudServerInfo <- function(name, url) {
+  list(
+    name = name,
+    url = getOption("rsconnect.shinyapps_url", url),
+    certificate = inferCertificateContents(
+      system.file("cert/shinyapps.io.pem", package = "rsconnect")
+    )
+  )
+}
+
+findServer <- function(server = NULL,
+                       local = TRUE,
+                       error_call = caller_env()) {
+
+  if (!is.null(server)) {
+    check_string(server, call = error_call)
+
+    existing <- serverNames()
+    if (!server %in% existing) {
+      cli::cli_abort(c(
+        "Can't find {.arg server} with name {.str {server}}.",
+        i = "Known servers are {.str {existing}}."
+      ))
+    }
+    server
+  } else {
+    existing <- servers(local = local)
+
+    if (length(existing) == 0 || nrow(existing) == 0) {
+      cli::cli_abort("No local servers have been registered")
+    } else if (nrow(existing) == 1) {
+      existing$name
+    } else {
+      idx <- cli_menu(
+        "Multiple servers found.",
+        "Which one do you want to use?",
+        c(i = "Use {.arg server} to pick one of {.str {existing$name}}."),
+        choices = existing$name
+      )
+      existing$name[idx]
+    }
+  }
+}
+
+#' Server management
+#'
+#' @description
+#' These functions manage the list of known servers:
+#'
+#' * `addServer()` registers a Posit connect server. Once it has been
+#'   registered, you can connect to an account on the server using
+#'   [connectUser()].
+#' * `removeServer()` removes a server from the registry.
+#' * `addServerCertificate()` adds a certificate to a server.
+#'
+#' @param url URL for the server. Can be a bare hostname like
+#'   `connect.mycompany.com` or a url like `http://posit.mycompany.com/connect`.
+#' @param name Server name. If omitted, the server hostname is used.
+#' @param certificate Optional. Either a path to certificate file or a
+#'   character vector containing the certificate's contents.
+#' @param validate Validate that `url` actually points to a Posit Connect
+#'   server?
+#' @param quiet Suppress output and prompts where possible.
+#' @export
 #' @examples
 #' \dontrun{
-#'
 #' # register a local server
 #' addServer("http://myrsconnect/", "myserver")
 #'
@@ -40,237 +168,121 @@
 #' connectUser(server = "myserver")
 #' }
 #' @export
-servers <- function(local = FALSE) {
-  configFiles <- list.files(serverConfigDir(), pattern = glob2rx("*.dcf"),
-                            full.names = TRUE)
-  parsed <- lapply(configFiles, function(file) {
-    info <- read.dcf(file)
+addServer <- function(url, name = NULL, certificate = NULL, validate = TRUE, quiet = FALSE) {
+  check_string(url)
+  check_name(name, allow_null = TRUE)
 
-    # empty if no contents
-    if (identical(nrow(info), 0L))
-      return(NULL)
-
-    # provide empty certificate if not specified in DCF (only if we also have a URL)
-    if (!("certificate" %in% colnames(info))) {
-      info <- cbind(info, certificate = "")
+  if (validate) {
+    out <- validateConnectUrl(url, certificate)
+    if (!out$valid) {
+      cli::cli_abort("{.arg url} does not appear to be a Posit Connect server.")
     }
-
-    # return parsed server info
-    info
-  })
-  locals <- do.call(rbind, parsed)
-  if (local) {
-    locals
-  } else {
-    serversList <- rbind(
-      locals,
-      as.data.frame(shinyappsServerInfo(), stringsAsFactors = FALSE),
-      as.data.frame(cloudServerInfo(), stringsAsFactors = FALSE))
-
-    # RStudio IDE requires a server whose name matches the server name on
-    # previously configured accounts. Prevent breakage for pre-rebrand users.
-    if (!is.null(rsconnect::accounts(server = "rstudio.cloud"))) {
-      serversList <- rbind(
-        serversList,
-        as.data.frame(cloudServerInfo("rstudio.cloud"), stringsAsFactors = FALSE)
-      )
-    }
-    serversList
-  }
-}
-
-serverConfigDir <- function() {
-  rsconnectConfigDir("servers")
-}
-
-serverConfigFile <- function(name) {
-  normalizePath(file.path(serverConfigDir(), paste(name, ".dcf", sep = "")),
-                mustWork = FALSE)
-}
-
-shinyappsServerInfo <- function() {
-  info <- list(name = "shinyapps.io",
-               certificate = inferCertificateContents(
-                 system.file("cert/shinyapps.io.pem", package = "rsconnect")),
-               url = getOption("rsconnect.shinyapps_url",
-                               "https://api.shinyapps.io/v1"))
-}
-
-cloudServerInfo <- function(name = "posit.cloud") {
-  # We encode the current and prior product names here and call this function to
-  # see if a configured server identifier references the cloud product.
-  if (!is.element(name, c("posit.cloud", "rstudio.cloud"))) {
-    name <- "posit.cloud"
-  }
-  info <- list(name = name,
-               certificate = inferCertificateContents(
-                 system.file("cert/shinyapps.io.pem", package = "rsconnect")),
-               url = getOption("rsconnect.shinyapps_url",
-                               "https://api.shinyapps.io/v1"))
-}
-
-#' @rdname servers
-#' @export
-discoverServers <- function(quiet = FALSE) {
-  # TODO: Better discovery mechanism?
-  discovered <- getOption("rsconnect.local_servers", "http://localhost:3939/__api__")
-
-  # get the URLs of the known servers, and silently add any that aren't yet
-  # present
-  existing <- servers()[, "url"]
-  introduced <- setdiff(discovered, existing)
-  lapply(introduced, function(url) { addServer(url, quiet = TRUE) })
-
-  if (!quiet && length(introduced) > 0) {
-    message("Discovered ", length(introduced),
-            (if (length(introduced) == 1) "server" else "servers"), ":")
-    lapply(introduced, message)
-  } else if (!quiet) {
-    message("No new servers found.")
-  }
-  invisible(introduced)
-}
-
-getDefaultServer <- function(local = FALSE, prompt = TRUE) {
-   existing <- servers(local)
-   # if there are no existing servers, silently try to discover one to work with
-   if (length(existing) == 0 || nrow(existing) == 0) {
-     discoverServers(quiet = TRUE)
-     existing <- servers(local)
-   }
-
-   # if exactly one server exists, return it
-   if (nrow(existing) == 1) {
-     return(list(name = as.character(existing[, "name"]),
-                 url = as.character(existing[, "url"])))
-   }
-
-   # no default server, prompt if there are multiple choices
-  if (nrow(existing) > 1 && prompt && interactive()) {
-    name <- as.character(existing[1, "name"])
-    message("Registered servers: ", paste(existing[, "name"], collapse = ", "))
-    input <- readline(paste0(
-      "Which server (default '", name, "')? "))
-    if (nchar(input) > 0) {
-      name <- input
-    }
-    return(serverInfo(name))
-  }
-}
-
-#' @rdname servers
-#' @export
-addConnectServer <- function(url, name = NULL, certificate = NULL,
-                             quiet = FALSE) {
-  addServer(ensureConnectServerUrl(url), name, certificate, quiet)
-}
-
-#' @rdname servers
-#' @export
-addServer <- function(url, name = NULL, certificate = NULL, quiet = FALSE) {
-  if (!isStringParam(url))
-    stop(stringParamErrorMessage("url"))
-
-  serverUrl <- parseHttpUrl(url)
-
-  # TODO: test server by hitting URL and getting config?
-
-  # if no name is supplied for the server, make one up based on the host portion
-  # of its URL
-  if (is.null(name)) {
-    name <- serverUrl$host
-    if (!quiet && interactive()) {
-      input <- readline(paste0(
-        "Enter a nickname for this server (default '", name, "'): "))
-      if (nchar(input) > 0) {
-        name <- input
-      }
-    }
+    url <- out$url
   }
 
-  if (!identical(serverUrl$protocol, "https") &&
-      !is.null(certificate) && nzchar(certificate)) {
-    stop("Certificates may only be attached to servers that use the ",
-         "HTTPS protocol. Sepecify an HTTPS URL for the server, or ",
-         "omit the certificate.")
-  }
-
-  # resolve certificate argument
-  certificate <- inferCertificateContents(certificate)
-
-  # write the server info
-  configFile <- serverConfigFile(name)
-  if (is.null(certificate)) {
-    # no certificate, just write name and URL for brevity
-    write.dcf(list(name = name,
-                   url = url),
-              configFile)
-  } else {
-    # write all fields
-    write.dcf(list(name = name,
-                   url = url,
-                   certificate = certificate),
-              configFile,
-              keep.white = "certificate")
-  }
+  name <- name %||% serverName(url)
+  registerServer(name, url, certificate)
 
   if (!quiet) {
     message("Server '", name,  "' added successfully: ", url)
   }
 }
 
-#' @rdname servers
-#' @export
-removeServer <- function(name) {
-  if (!isStringParam(name))
-    stop(stringParamErrorMessage("name"))
-  configFile <- serverConfigFile(name)
-  if (file.exists(configFile))
-    unlink(configFile)
-  else
-    warning("The server '", name, "' is not currently registered.")
-}
 
+# Validate a connect server URL by hitting a known configuration endpoint
+# The URL may be specified with or without the protocol and port; this function
+# will try both http and https and follow any redirects given by the server.
+validateConnectUrl <- function(url, certificate = NULL) {
+  # Add protocol if missing, assuming https except for local installs
+  if (!grepl("://", url, fixed = TRUE)) {
+    if (grepl(":3939", url, fixed = TRUE)) {
+      url <- paste0("http://", url)
+    } else {
+      url <- paste0("https://", url)
+    }
+  }
+  url <- ensureConnectServerUrl(url)
+  is_http <- grepl("^http://", url)
 
-#' @rdname servers
-#' @export
-serverInfo <- function(name) {
-  if (!isStringParam(name))
-    stop(stringParamErrorMessage("name"))
-
-  # there's no config file for Posit's hosted offerings
-  if (identical(name, "shinyapps.io")) {
-    return(shinyappsServerInfo())
+  GET_server_settings <- function(url) {
+    timeout <- getOption("rsconnect.http.timeout", if (isWindows()) 20 else 10)
+    auth_info <- list(certificate = inferCertificateContents(certificate))
+    GET(
+      parseHttpUrl(url),
+      auth_info,
+      "/server_settings",
+      timeout = timeout
+    )
   }
 
-  if (identical(name, cloudServerInfo(name)$name)) {
-    return(cloudServerInfo(name))
+  response <- NULL
+  cnd <- catch_cnd(response <- GET_server_settings(url), "error")
+  if (is_http && cnd_inherits(cnd, "OPERATION_TIMEDOUT")) {
+    url <- gsub("^http://", "https://", url)
+    cnd <- catch_cnd(response <- GET_server_settings(url), "error")
   }
 
-  configFile <- serverConfigFile(name)
-  if (!file.exists(configFile))
-    stop(missingServerErrorMessage(name))
+  if (!is.null(cnd)) {
+    return(list(valid = FALSE, message = conditionMessage(cnd)))
+  }
 
-  serverDcf <- readDcf(serverConfigFile(name), all = TRUE)
-  info <- as.list(serverDcf)
-  info
+  contentType <- attr(response, "httpContentType")
+  if (!isContentType(contentType, "application/json")) {
+    return(list(valid = FALSE, message = "Endpoint did not return JSON"))
+  }
+
+  url <- gsub("/server_settings$", "", attr(response, "httpUrl"))
+  list(valid = TRUE, url = url, response = response)
 }
 
-#' @rdname servers
+# Return a URL that can be concatenated with sub-paths like /content
+ensureConnectServerUrl <- function(url) {
+  # strip trailing /
+  url <- gsub("/$", "", url)
+
+  # ensure 'url' ends with '/__api__'
+  if (!grepl("/__api__$", url))
+    url <- paste(url, "/__api__", sep = "")
+
+  url
+}
+
+registerServer <- function(name, url, certificate = NULL, error_call = caller_env()) {
+  certificate <- inferCertificateContents(certificate)
+
+  if (!identical(substr(url, 1, 5), "https") && !is.null(certificate)) {
+    cli::cli_abort(
+      c(
+        "Certificates may only be attached to servers that use the HTTPS protocol.",
+        i = "Specify an HTTPS URL for the server, or omit the certificate."
+      ),
+      call = error_call
+    )
+  }
+
+  path <- serverConfigFile(name)
+  fields <- list(
+    name = name,
+    url = url,
+    certificate = certificate %||% NA
+  )
+  write.dcf(fields, path, keep.white = "certificate")
+}
+
+#' @rdname addServer
+#' @export
+removeServer <- function(name = NULL) {
+  name <- findServer(name)
+
+  configFile <- serverConfigFile(name)
+  unlink(configFile)
+}
+
+#' @rdname addServer
 #' @export
 addServerCertificate <- function(name, certificate, quiet = FALSE) {
-  # read the existing server information (throws an error on failure)
   info <- serverInfo(name)
-
-  if (!identical(substr(info$url, 1, 5), "https")) {
-    stop("Certificates may only be attached to servers that use the ",
-         "HTTPS protocol. Sepecify an HTTPS URL for the server, or ",
-         "omit the certificate.")
-  }
-
-  # append the certificate and re-write the server information
-  info$certificate <- inferCertificateContents(certificate)
-  write.dcf(info, serverConfigFile(name), keep.white = "certificate")
+  registerServer(name, info$url, certificate)
 
   if (!quiet)
     message("Certificate added to server '", name, "'")
@@ -278,28 +290,7 @@ addServerCertificate <- function(name, certificate, quiet = FALSE) {
   invisible(NULL)
 }
 
-missingServerErrorMessage <- function(name) {
-  paste0("server named '", name, "' does not exist")
-}
-
-clientForAccount <- function(account) {
-
-  # determine appropriate server information for account
-  if (isCloudServer(account$server)) {
-    constructor <- lucidClientForAccount(account)
-  } else {
-    serverInfo <- serverInfo(account$server)
-    account$certificate <- serverInfo$certificate
-    connectClient(serverInfo$url, account)
-  }
-}
-
-ensureConnectServerUrl <- function(url) {
-  # ensure 'url' ends with '/__api__'
-  if (!grepl("/__api__$", url))
-    url <- paste(url, "/__api__", sep = "")
-
-  # if we have duplicated leading slashes, remove them
-  url <- gsub("(/+__api__)$", "/__api__", url)
-  url
+serverName <- function(url) {
+  url <- parseHttpUrl(url)
+  paste0(url$host, if (nchar(url$port) > 0) ":", url$port)
 }

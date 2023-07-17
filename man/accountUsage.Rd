@@ -14,11 +14,11 @@ accountUsage(
 )
 }
 \arguments{
-\item{account}{Account name. If a single account is registered on the
-system then this parameter can be omitted.}
+\item{account, server}{Uniquely identify a remote server with either your
+user \code{account}, the \code{server} name, or both. If neither are supplied, and
+there are multiple options, you'll be prompted to pick one.
 
-\item{server}{Server name. Required only if you use the same account name on
-multiple servers.}
+Use \code{\link[=accounts]{accounts()}} to see the full list of available options.}
 
 \item{usageType}{Use metric to retreive (for example: "hours")}
 

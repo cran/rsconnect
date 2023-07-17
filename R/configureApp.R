@@ -7,10 +7,7 @@
 #' @param appName Name of application to configure
 #' @param appDir Directory containing application. Defaults to
 #'   current working directory.
-#' @param account Account name. If a single account is registered on the
-#'   system then this parameter can be omitted.
-#' @param server Server name. Required only if you use the same account name on
-#'   multiple servers (see [servers()])
+#' @inheritParams deployApp
 #' @param redeploy Re-deploy application after its been configured.
 #' @param size Configure application instance size
 #' @param instances Configure number of application instances
@@ -27,8 +24,9 @@ configureApp <- function(appName, appDir = getwd(), account = NULL, server = NUL
                          redeploy = TRUE, size = NULL,
                          instances = NULL, logLevel = c("normal", "quiet", "verbose")) {
 
-  # resolve target account and application
-  accountDetails <- accountInfo(resolveAccount(account, server), server)
+  accountDetails <- accountInfo(account, server)
+  checkShinyappsServer(accountDetails$server)
+
   application <- resolveApplication(accountDetails, appName)
 
   displayStatus <- displayStatus(identical(logLevel, "quiet"))
@@ -46,7 +44,6 @@ configureApp <- function(appName, appDir = getwd(), account = NULL, server = NUL
   }
 
   # set application properties
-  serverDetails <- serverInfo(accountDetails$server)
   client <- clientForAccount(accountDetails)
   for (i in names(properties)) {
     propertyName <- i
@@ -82,8 +79,7 @@ configureApp <- function(appName, appDir = getwd(), account = NULL, server = NUL
 #' @param appName Name of application
 #' @param appPath Directory or file that was deployed. Defaults to current
 #'   working directory.
-#' @param account Account name. If a single account is registered on the system
-#'   then this parameter can be omitted.
+#' @inheritParams deployApp
 #' @param force Forcibly set the property
 #'
 #' @note This function only works for ShinyApps servers.
@@ -100,18 +96,24 @@ configureApp <- function(appName, appDir = getwd(), account = NULL, server = NUL
 #' }
 #' @export
 setProperty <- function(propertyName, propertyValue, appPath = getwd(),
-                        appName = NULL, account = NULL, force = FALSE) {
+                        appName = NULL, account = NULL, server = NULL, force = FALSE) {
 
-  # resolve the application target and target account info
-  target <- deploymentTarget(appPath, appName, NULL, NULL, account)
-  accountDetails <- accountInfo(target$account)
-  lucid <- lucidClientForAccount(accountDetails)
-  application <- getAppByName(lucid, accountDetails, target$appName)
+  deployment <- findDeployment(
+    appPath = appPath,
+    appName = appName,
+    server = server,
+    account = account
+  )
+  accountDetails <- accountInfo(deployment$account, deployment$server)
+  checkShinyappsServer(accountDetails$server)
+
+  client <- clientForAccount(accountDetails)
+  application <- getAppByName(client, accountDetails, deployment$name)
   if (is.null(application))
     stop("No application found. Specify the application's directory, name, ",
          "and/or associated account.")
 
-  invisible(lucid$setApplicationProperty(application$id,
+  invisible(client$setApplicationProperty(application$id,
                                          propertyName,
                                          propertyValue,
                                          force))
@@ -126,8 +128,7 @@ setProperty <- function(propertyName, propertyValue, appPath = getwd(),
 #' @param appName Name of application
 #' @param appPath Directory or file that was deployed. Defaults to current
 #'   working directory.
-#' @param account Account name. If a single account is registered on the system
-#'   then this parameter can be omitted.
+#' @inheritParams deployApp
 #' @param force Forcibly unset the property
 #'
 #' @note This function only works for ShinyApps servers.
@@ -141,18 +142,24 @@ setProperty <- function(propertyName, propertyValue, appPath = getwd(),
 #' }
 #' @export
 unsetProperty <- function(propertyName, appPath = getwd(), appName = NULL,
-                          account = NULL, force = FALSE) {
+                          account = NULL, server = NULL, force = FALSE) {
 
-  # resolve the application target and target account info
-  target <- deploymentTarget(appPath, appName, NULL, NULL, account)
-  accountDetails <- accountInfo(target$account)
-  lucid <- lucidClientForAccount(accountDetails)
-  application <- getAppByName(lucid, accountInfo, target$appName)
+  deployment <- findDeployment(
+    appPath = appPath,
+    appName = appName,
+    server = server,
+    account = account
+  )
+  accountDetails <- accountInfo(deployment$account, deployment$server)
+  checkShinyappsServer(accountDetails$server)
+
+  client <- clientForAccount(accountDetails)
+  application <- getAppByName(client, accountInfo, deployment$name)
   if (is.null(application))
     stop("No application found. Specify the application's directory, name, ",
          "and/or associated account.")
 
-  invisible(lucid$unsetApplicationProperty(application$id,
+  invisible(client$unsetApplicationProperty(application$id,
                                            propertyName,
                                            force))
 }
@@ -173,11 +180,14 @@ unsetProperty <- function(propertyName, appPath = getwd(), appName = NULL,
 #' @export
 showProperties <- function(appPath = getwd(), appName = NULL, account = NULL) {
 
-  # determine the log target and target account info
-  target <- deploymentTarget(appPath, appName, NULL, NULL, account)
-  accountDetails <- accountInfo(target$account)
-  lucid <- lucidClientForAccount(accountDetails)
-  application <- getAppByName(lucid, accountDetails, target$appName)
+  deployment <- findDeployment(
+    appPath = appPath,
+    appName = appName,
+    account = account
+  )
+  accountDetails <- accountInfo(deployment$account)
+  client <- clientForAccount(accountDetails)
+  application <- getAppByName(client, accountDetails, deployment$name)
   if (is.null(application))
     stop("No application found. Specify the application's directory, name, ",
          "and/or associated account.")

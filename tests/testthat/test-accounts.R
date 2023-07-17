@@ -1,61 +1,35 @@
-context("accounts")
+test_that("no accounts returns empty data frame", {
+  local_temp_config()
 
-havingFakeAccounts <- function(expr) {
-  registerUserApiKey("simple", "alice", 13, "alice-api-key")
-  registerUserApiKey("complex", "hatter+mad@example.com", 42, "hatter-api-key")
-
-  eval(expr)
-}
-
-test_that("account file returned with server name", {
-  havingFakeConfig(
-    havingFakeAccounts({
-      expected <- normalizePath(file.path(rsconnectConfigDir("accounts"),
-                                          "simple/alice.dcf"))
-      dir <- accountConfigFile("alice", server = "simple")
-      expect_equal(dir, expected)
-    })
+  expect_equal(
+    accounts(),
+    data.frame(name = character(), server = character(), stringsAsFactors = FALSE)
   )
 })
 
-test_that("account file containing pattern characters found with server name", {
-  havingFakeConfig(
-    havingFakeAccounts({
-      # https://github.com/rstudio/rsconnect/issues/620
-      expected <- normalizePath(file.path(rsconnectConfigDir("accounts"),
-                                          "complex/hatter+mad@example.com.dcf"))
-      dir <- accountConfigFile("hatter+mad@example.com", server = "complex")
-      expect_equal(dir, expected)
-    })
-  )
+test_that("hasAccounts works", {
+  local_temp_config()
+  addTestServer()
+  addTestAccount("john")
+
+  expect_true(hasAccount("john", "example.com"))
+  expect_false(hasAccount("john", "example2.com"))
+  expect_false(hasAccount("mary", "example.com"))
 })
 
-test_that("account file found without server name", {
-  havingFakeConfig(
-    havingFakeAccounts({
-      expected <- normalizePath(file.path(rsconnectConfigDir("accounts"),
-                                          "simple/alice.dcf"))
-      dir <- accountConfigFile("alice", server = NULL)
-      expect_equal(dir, expected)
-    })
-  )
+test_that("secrets are hidden from casual inspection", {
+  local_temp_config()
+  registerAccount("server", "1", "id", token = "token", secret = "SECRET")
+  registerAccount("server", "2", "id", token = "token", private_key = "SECRET")
+  registerAccount("server", "3", "id", apiKey = "SECRET")
+
+  expect_snapshot({
+    accountInfo("1")$secret
+    accountInfo("2")$private_key
+    accountInfo("3")$apiKey
+  })
 })
 
-test_that("account file containing pattern characters found without server name", {
-  havingFakeConfig(
-    havingFakeAccounts({
-      # https://github.com/rstudio/rsconnect/issues/620
-      expected <- normalizePath(file.path(rsconnectConfigDir("accounts"),
-                                          "complex/hatter+mad@example.com.dcf"))
-      dir <- accountConfigFile("hatter+mad@example.com", server = NULL)
-      expect_equal(dir, expected)
-    })
-  )
-})
-
-test_that("All hosted product names are identified as cloud", {
-  expect_true(isCloudServer("shinyapps.io"))
-  expect_true(isCloudServer("rstudio.cloud"))
-  expect_true(isCloudServer("posit.cloud"))
-  expect_false(isCloudServer("connect.internal"))
+test_that("setAccountInfo() gives nice error on bad copy and paste", {
+  expect_snapshot(setAccountInfo("name", "token", "<SECRET>"), error = TRUE)
 })

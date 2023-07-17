@@ -2,7 +2,7 @@
 % Please edit documentation in R/appDependencies.R
 \name{appDependencies}
 \alias{appDependencies}
-\title{Detect Application Dependencies}
+\title{Detect application dependencies}
 \usage{
 appDependencies(appDir = getwd(), appFiles = NULL)
 }
@@ -10,46 +10,104 @@ appDependencies(appDir = getwd(), appFiles = NULL)
 \item{appDir}{Directory containing application. Defaults to current working
 directory.}
 
-\item{appFiles}{The files and directories to bundle and deploy (only if
-\code{upload = TRUE}). Can be \code{NULL}, in which case all the files in the
-directory containing the application are bundled, with the exception of
-any listed in an \code{.rscignore} file. Takes precedence over
-\code{appFileManifest} if both are supplied.}
+\item{appFiles}{A character vector giving relative paths to the files to
+include in the deployed bundle.}
 }
 \value{
-Returns a data frame listing the package
-dependencies detected for the application: \tabular{ll}{ \code{package}
-\tab Name of package \cr \code{version} \tab Version of package\cr }
+A data frame with one row for each dependency (direct, indirect,
+and inferred), and 4 columns:
+\itemize{
+\item \code{Package}: package name.
+\item \code{Version}: local version.
+\item \code{Source}: a short string describing the source of the package install,
+as described above.
+\item \code{Repository}: for CRAN and CRAN-like repositories, the URL to the
+repository. This will be ignored by the server if it has been configured
+with it's own repository name -> repository URL mapping.
+}
 }
 \description{
-Recursively detect all package dependencies for an application. This function
-parses all .R files in the application directory to determine what packages
-the application depends on; and for each of those packages what other
-packages they depend on.
+\code{appDependencies()} recursively detects all R package dependencies for an
+application by parsing all \code{.R} and \code{.Rmd} files and looking for calls
+to \code{library()}, \code{require()}, \code{requireNamespace()}, \code{::}, and so on.
+It then adds implicit dependencies (i.e. an \code{.Rmd} requires Rmarkdown)
+and adds all recursive dependencies to create a complete manifest of
+package packages need to be installed to run the app.
 }
-\details{
-Dependencies are determined by parsing application source code and
-looking for calls to \code{library}, \code{require}, \code{::}, and
-\code{:::}.
-
-Recursive dependencies are detected by examining the \code{Depends},
-\code{Imports}, and \code{LinkingTo} fields of the packages immediately
-dependend on by the application.
+\section{Dependency discovery}{
+rsconnect use one of three mechanisms to find which packages your application
+uses:
+\enumerate{
+\item If \code{renv.lock} is present, it will use the versions and sources defined in
+that file. If you're using the lockfile for some other purpose and
+don't want it to affect deployment, add \code{renv.lock} to \code{.rscignore}.
+\item Otherwise, rsconnect will call \code{renv::snapshot()} to find all packages
+used by your code. If you'd instead prefer to only use the packages
+declared in a \code{DESCRIPTION} file, run
+\code{renv::settings$snapshot.type("explicit")} to activate renv's "explicit"
+mode.
+\item Dependency resolution using renv is a new feature in rsconnect 1.0.0, and
+while we have done our best to test it, it still might fail for your app.
+If this happens, please \href{https://github.com/rstudio/rsconnect/issues}{file an issue}
+then set \code{options(rsconnect.packrat = TRUE)} to revert to the old
+dependency discovery mechanism.
 }
-\note{
-Since the \code{Suggests} field is not included when determining
-recursive dependencies of packages, it's possible that not every package
-required to run your application will be detected.
-
-In this case, you can force a package to be included dependency by
-inserting call(s) to \code{require} within your source directory. This code
-need not actually execute, for example you could create a standalone file
-named \code{dependencies.R} with the following code: \cr \cr
-\code{require(xts)} \cr \code{require(colorspace)} \cr
-
-This will force the \code{xts} and \code{colorspace} packages to be
-installed along with the rest of your application when it is deployed.
 }
+
+\section{Remote installation}{
+When deployed, the app must first install all of these packages, and
+rsconnect ensures the versions used on the server will match the versions
+you used locally. It knows how to install packages from the following
+sources:
+\itemize{
+\item CRAN and BioConductor (\code{Source: CRAN} or \code{Source: Bioconductor}). The
+remote server will ignore the specific CRAN or Bioconductor mirror that
+you use locally, always using the CRAN/BioC mirror that has been configured
+on the server.
+\item Other CRAN like and CRAN-like repositories. These packages will have
+a \code{Source} determined by the value of \code{getOptions("repos")}. For example,
+if you've set the following options:
+
+\if{html}{\out{<div class="sourceCode R">}}\preformatted{options(
+   repos = c(
+     CRAN = "https://cran.rstudio.com/",
+     CORPORATE = "https://corporate-packages.development.company.com"
+   )
+)
+}\if{html}{\out{</div>}}
+
+Then packages installed from your corporate package repository will
+have source \code{CORPORATE}. Posit Connect
+\href{https://docs.posit.co/connect/admin/appendix/configuration/#RPackageRepository}{can be configured}
+to override their repository url so that (e.g.) you can use different
+packages versions on stagning and production servers.
+\item Packages installed from GitHub, GitLab, or BitBucket, have \code{Source}
+\code{github}, \code{gitlab}, and \code{bitbucket} respectively. When deployed, the
+bundle contains the additional metadata needed to precisely recreated
+the installed version.
+}
+
+It's not possible to recreate the packages that you have built and installed
+from a directory on your local computer. This will have \code{Source: NA} and
+will cause the deployment to error. To resolve this issue, you'll need to
+install from one of the known sources described above.
+}
+
+\section{Suggested packages}{
+The \code{Suggests} field is not included when determining recursive dependencies,
+so it's possible that not every package required to run your application will
+be detected.
+
+For example, ggplot2's \code{geom_hex()} requires the hexbin package to be
+installed, but it is only suggested by ggplot2. So if you app uses
+\code{geom_hex()} it will fail, reporting that the hexbin package is not
+installed.
+
+You can overcome this problem with (e.g.) \code{requireNamespace(hexbin)}.
+This will tell rsconnect that your app needs the hexbin package, without
+otherwise affecting your code.
+}
+
 \examples{
 \dontrun{
 

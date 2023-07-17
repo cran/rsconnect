@@ -4,10 +4,7 @@
 #' @param appName Name of application
 #' @param appDir Directory containing application. Defaults to
 #'   current working directory.
-#' @param account Account name. If a single account is registered on the
-#'   system then this parameter can be omitted.
-#' @param server Server name. Required only if you use the same account name on
-#'   multiple servers.
+#' @inheritParams deployApp
 #' @param usageType Use metric to retreive (for example: "hours")
 #' @param from Date range starting timestamp (Unix timestamp or relative time
 #'   delta such as "2d" or "3w").
@@ -20,10 +17,9 @@
 showUsage <- function(appDir = getwd(), appName = NULL, account = NULL, server = NULL,
                       usageType = "hours", from = NULL, until = NULL, interval = NULL) {
 
-  # resolve account
-  accountDetails <- accountInfo(resolveAccount(account, server), server)
+  accountDetails <- accountInfo(account, server)
+  checkShinyappsServer(accountDetails$server)
 
-  # intialize client
   api <- clientForAccount(accountDetails)
 
   # resolve application
@@ -58,35 +54,34 @@ showUsage <- function(appDir = getwd(), appName = NULL, account = NULL, server =
 
 #' Show Application Metrics
 #'
-#' Show application metrics of a currently deployed application
+#' Show application metrics of a currently deployed application.
+#' This function only works for ShinyApps servers.
+#'
 #' @param metricSeries Metric series to query. Refer to the
 #'   [shinyapps.io documentation](<https://docs.posit.co/shinyapps.io/metrics.html#ApplicationMetrics>)
 #'   for available series.
 #' @param metricNames Metric names in the series to query. Refer to the
 #'   [shinyapps.io documentation](<https://docs.posit.co/shinyapps.io/metrics.html#ApplicationMetrics>)
 #'   for available metrics.
-#' @param appName Name of application
-#' @param appDir Directory containing application. Defaults to
-#'   current working directory.
-#' @param account Account name. If a single account is registered on the
-#'   system then this parameter can be omitted.
-#' @param server Server name. Required only if you use the same account name on
-#'   multiple servers.
+#' @inheritParams deployApp
 #' @param from Date range starting timestamp (Unix timestamp or relative time
 #'   delta such as "2d" or "3w").
 #' @param until Date range ending timestamp (Unix timestamp or relative time
 #'   delta such as "2d" or "3w").
 #' @param interval Summarization interval. Data points at intervals less then this
 #'   will be grouped. (Relative time delta e.g. "120s" or "1h" or "30d").
-#' @note This function only works for ShinyApps servers.
 #' @export
-showMetrics <- function(metricSeries, metricNames, appDir = getwd(), appName = NULL, account = NULL, server = NULL,
-                        from = NULL, until = NULL, interval = NULL) {
+showMetrics <- function(metricSeries,
+                        metricNames,
+                        appDir = getwd(),
+                        appName = NULL,
+                        account = NULL,
+                        server = "shinyapps.io",
+                        from = NULL,
+                        until = NULL,
+                        interval = NULL) {
 
-  # resolve account
-  accountDetails <- accountInfo(resolveAccount(account, server), server)
-
-  # intialize client
+  accountDetails <- accountInfo(account, server)
   api <- clientForAccount(accountDetails)
 
   # resolve application
@@ -106,26 +101,16 @@ showMetrics <- function(metricSeries, metricNames, appDir = getwd(), appName = N
     stop("No data.", call. = FALSE)
   }
 
-  # get data points
-  points <- data$points
-  points <- lapply(points, function(X) {
-    X$time <- X$time / 1000 # convert from milliseconds to seconds
-    X
-  })
-
-  # convert to data frame
-  df <- data.frame(matrix(unlist(points), nrow = length(points), byrow = TRUE), stringsAsFactors = FALSE)
-  colnames(df) <- c(metricNames, "timestamp")
-  return(df)
+  points <- lapply(data$points, as.data.frame, stringsAsFactors = FALSE)
+  points <- do.call(rbind, points)
+  points$time <- .POSIXct(points$time / 1000)
+  points
 }
 
 #' Show Account Usage
 #'
 #' Show account usage
-#' @param account Account name. If a single account is registered on the
-#'   system then this parameter can be omitted.
-#' @param server Server name. Required only if you use the same account name on
-#'   multiple servers.
+#' @inheritParams deployApp
 #' @param usageType Use metric to retreive (for example: "hours")
 #' @param from Date range starting timestamp (Unix timestamp or relative time
 #'   delta such as "2d" or "3w").
@@ -137,10 +122,9 @@ showMetrics <- function(metricSeries, metricNames, appDir = getwd(), appName = N
 #' @export
 accountUsage <- function(account = NULL, server = NULL, usageType = "hours",
                          from = NULL, until = NULL, interval = NULL) {
-  # resolve account
-  accountDetails <- accountInfo(resolveAccount(account, server), server)
+  accountDetails <- accountInfo(account, server)
+  checkShinyappsServer(accountDetails$server)
 
-  # intialize client
   api <- clientForAccount(accountDetails)
 
   # get application usage

@@ -10,31 +10,12 @@
 #'
 #' @keywords internal
 rsconnectConfigDir <- function(subDir = NULL) {
-
-  # Compute the name of the configuration directory using the standard R method
   configDir <- applicationConfigDir()
 
   # If the configuration directory doesn't exist, see if there's an old one to
   # migrate
-  if (!file_test("-d", configDir)) {
-
-    # For historical reasons too painful to enumerate here, there are not one
-    # but *two* old locations for configuration files to check. If we find
-    # one, we need to move its contents to the new folder.
-    oldConfigDir <- oldApplicationConfigDir("rsconnect")
-    if (!file_test("-d", oldConfigDir)) {
-      oldConfigDir <- oldApplicationConfigDir("connect")
-    }
-
-    # We have no configuration directory but we do have an old one; migrate it.
-    if (file_test("-d", oldConfigDir)) {
-
-      # Create the parent folder if necessary
-      dir.create(dirname(configDir), recursive = TRUE, showWarnings = FALSE)
-
-      # Migrate the old directory to the new one
-      file.rename(oldConfigDir, configDir)
-    }
+  if (!dirExists(configDir)) {
+    migrateConfig(configDir)
   }
 
   # Form the target and append the optional subdirectory if given
@@ -43,56 +24,7 @@ rsconnectConfigDir <- function(subDir = NULL) {
     target <- file.path(target, subDir)
   }
 
-  # Create the path if it doesn't exist
-  dir.create(target, recursive = TRUE, showWarnings = FALSE)
-
-  # Return completed path
-  target
-}
-
-#' Old Application Config Directory
-#'
-#' Returns the old application configuration directory used by rsconnect
-#' 0.8.24 and prior. These versions wrote configuration data to XDG compliant
-#' locations, but CRAN policy has since further restricted the disk locations
-#' that are permitted. See:
-#'
-#' https://cran.r-project.org/web/packages/policies.html
-#'
-#' @param appName The application's name (connect or rsconnect)
-#'
-#' @return The old application configuration directory.
-#'
-#' @keywords internal
-oldApplicationConfigDir <- function(appName) {
-
-  # get the home directory from the operating system (in case
-  # the user has redefined the meaning of ~) but fault back
-  # to ~ if there is no HOME variable defined
-  homeDir <- Sys.getenv("HOME", unset = "~")
-
-  # check for R specific config dir
-  configDir <- Sys.getenv("R_USER_CONFIG_DIR")
-
-  if (nzchar(configDir)) {
-    # R specific config dir, append app name only
-    configDir <- file.path(configDir, appName)
-  } else {
-    # no R specific config dir; determine application config dir (platform specific)
-    sysName <- Sys.info()[["sysname"]]
-    if (identical(sysName, "Windows"))
-      configDir <- Sys.getenv("APPDATA")
-    else if (identical(sysName, "Darwin"))
-      configDir <- file.path(homeDir, "Library/Application Support")
-    else
-      configDir <- Sys.getenv("XDG_CONFIG_HOME", file.path(homeDir, ".config"))
-
-    # append the application name
-    configDir <- file.path(configDir, "R", appName)
-  }
-
-  # normalize path
-  normalizePath(configDir, mustWork = FALSE)
+  dirCreate(target)
 }
 
 #' Application Configuration Directory
@@ -128,4 +60,77 @@ applicationConfigDir <- function() {
 
     file.path(path, "R", "rsconnect")
   }
+}
+
+# server ------------------------------------------------------------------
+
+serverConfigDir <- function() {
+  rsconnectConfigDir("servers")
+}
+
+serverConfigFile <- function(name) {
+  normalizePath(
+    file.path(serverConfigDir(), paste(name, ".dcf", sep = ""))
+  )
+}
+
+serverConfigFiles <- function() {
+  list.files(serverConfigDir(), pattern = glob2rx("*.dcf"), full.names = TRUE)
+}
+
+# account -----------------------------------------------------------------
+
+accountConfigDir <- function() {
+  rsconnectConfigDir("accounts")
+}
+
+accountConfigFile <- function(name, server) {
+  normalizePath(
+    file.path(accountConfigDir(), server, paste(name, ".dcf", sep = ""))
+  )
+}
+
+accountConfigFiles <- function(server = NULL) {
+  path <- accountConfigDir()
+  if (!is.null(server)) {
+    path <- file.path(path, server)
+  }
+
+  list.files(path, pattern = glob2rx("*.dcf"), recursive = TRUE, full.names = TRUE)
+}
+
+
+# deployments -------------------------------------------------------------
+
+deploymentHistoryPath <- function(new = FALSE) {
+  file.path(
+    rsconnectConfigDir("deployments"),
+    paste0("history", if (new) ".new", ".dcf")
+  )
+}
+
+# given a path, return the directory under which rsconnect package state is
+# stored
+deploymentConfigDir <- function(recordPath) {
+  if (isDocumentPath(recordPath)) {
+    file.path(dirname(recordPath), "rsconnect", "documents", basename(recordPath))
+  } else {
+    file.path(recordPath, "rsconnect")
+  }
+}
+
+deploymentConfigFile <- function(recordPath, name, account, server) {
+  accountDir <- file.path(deploymentConfigDir(recordPath), server, account)
+  dirCreate(accountDir)
+  file.path(accountDir, paste0(name, ".dcf"))
+}
+
+deploymentConfigFiles <- function(recordPath) {
+  dir <- deploymentConfigDir(recordPath)
+  list.files(dir, glob2rx("*.dcf"), recursive = TRUE, full.names = TRUE)
+}
+
+# Does the path point to an individual piece of content?
+isDocumentPath <- function(path) {
+  tools::file_ext(path) != ""
 }

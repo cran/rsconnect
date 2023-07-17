@@ -10,7 +10,7 @@ showMetrics(
   appDir = getwd(),
   appName = NULL,
   account = NULL,
-  server = NULL,
+  server = "shinyapps.io",
   from = NULL,
   until = NULL,
   interval = NULL
@@ -25,16 +25,22 @@ for available series.}
 \href{https://docs.posit.co/shinyapps.io/metrics.html#ApplicationMetrics}{shinyapps.io documentation}
 for available metrics.}
 
-\item{appDir}{Directory containing application. Defaults to
-current working directory.}
+\item{appDir}{A directory containing an application (e.g. a Shiny app
+or plumber API). Defaults to the current directory.}
 
-\item{appName}{Name of application}
+\item{appName}{Application name, a string consisting of letters, numbers,
+\verb{_} and \code{-}. The application name is used to identify applications on a
+server, so much be unique.
 
-\item{account}{Account name. If a single account is registered on the
-system then this parameter can be omitted.}
+If not specified, the first deployment will be automatically it from the
+\code{appDir} for directory and website, and from the \code{appPrimaryDoc} for
+document. On subsequent deploys, it will use the previously stored value.}
 
-\item{server}{Server name. Required only if you use the same account name on
-multiple servers.}
+\item{account, server}{Uniquely identify a remote server with either your
+user \code{account}, the \code{server} name, or both. If neither are supplied, and
+there are multiple options, you'll be prompted to pick one.
+
+Use \code{\link[=accounts]{accounts()}} to see the full list of available options.}
 
 \item{from}{Date range starting timestamp (Unix timestamp or relative time
 delta such as "2d" or "3w").}
@@ -46,8 +52,6 @@ delta such as "2d" or "3w").}
 will be grouped. (Relative time delta e.g. "120s" or "1h" or "30d").}
 }
 \description{
-Show application metrics of a currently deployed application
-}
-\note{
+Show application metrics of a currently deployed application.
 This function only works for ShinyApps servers.
 }

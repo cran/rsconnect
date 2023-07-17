@@ -1,35 +1,103 @@
-#' Detect Application Dependencies
+#' Detect application dependencies
 #'
-#' Recursively detect all package dependencies for an application. This function
-#' parses all .R files in the application directory to determine what packages
-#' the application depends on; and for each of those packages what other
-#' packages they depend on.
-#' @inheritParams deployApp
+#' @description
+#' `appDependencies()` recursively detects all R package dependencies for an
+#' application by parsing all `.R` and `.Rmd` files and looking for calls
+#' to `library()`, `require()`, `requireNamespace()`, `::`, and so on.
+#' It then adds implicit dependencies (i.e. an `.Rmd` requires Rmarkdown)
+#' and adds all recursive dependencies to create a complete manifest of
+#' package packages need to be installed to run the app.
+#'
+#' # Dependency discovery
+#'
+#' rsconnect use one of three mechanisms to find which packages your application
+#' uses:
+#'
+#' 1. If `renv.lock` is present, it will use the versions and sources defined in
+#'    that file. If you're using the lockfile for some other purpose and
+#'    don't want it to affect deployment, add `renv.lock` to `.rscignore`.
+#'
+#' 2. Otherwise, rsconnect will call `renv::snapshot()` to find all packages
+#'    used by your code. If you'd instead prefer to only use the packages
+#'    declared in a `DESCRIPTION` file, run
+#'    `renv::settings$snapshot.type("explicit")` to activate renv's "explicit"
+#'    mode.
+#'
+#' 3. Dependency resolution using renv is a new feature in rsconnect 1.0.0, and
+#'    while we have done our best to test it, it still might fail for your app.
+#'    If this happens, please [file an issue](https://github.com/rstudio/rsconnect/issues)
+#'    then set `options(rsconnect.packrat = TRUE)` to revert to the old
+#'    dependency discovery mechanism.
+#'
+#' # Remote installation
+#'
+#' When deployed, the app must first install all of these packages, and
+#' rsconnect ensures the versions used on the server will match the versions
+#' you used locally. It knows how to install packages from the following
+#' sources:
+#'
+#' * CRAN and BioConductor (`Source: CRAN` or `Source: Bioconductor`). The
+#'   remote server will ignore the specific CRAN or Bioconductor mirror that
+#'   you use locally, always using the CRAN/BioC mirror that has been configured
+#'   on the server.
+#'
+#' * Other CRAN like and CRAN-like repositories. These packages will have
+#'   a `Source` determined by the value of `getOptions("repos")`. For example,
+#'   if you've set the following options:
+#'
+#'   ```R
+#'   options(
+#'      repos = c(
+#'        CRAN = "https://cran.rstudio.com/",
+#'        CORPORATE = "https://corporate-packages.development.company.com"
+#'      )
+#'   )
+#'   ```
+#'
+#'   Then packages installed from your corporate package repository will
+#'   have source `CORPORATE`. Posit Connect
+#'   [can be configured](https://docs.posit.co/connect/admin/appendix/configuration/#RPackageRepository)
+#'   to override their repository url so that (e.g.) you can use different
+#'   packages versions on stagning and production servers.
+#'
+#' * Packages installed from GitHub, GitLab, or BitBucket, have `Source`
+#'   `github`, `gitlab`, and `bitbucket` respectively. When deployed, the
+#'   bundle contains the additional metadata needed to precisely recreated
+#'   the installed version.
+#'
+#' It's not possible to recreate the packages that you have built and installed
+#' from a directory on your local computer. This will have `Source: NA` and
+#' will cause the deployment to error. To resolve this issue, you'll need to
+#' install from one of the known sources described above.
+#'
+#' # Suggested packages
+#'
+#' The `Suggests` field is not included when determining recursive dependencies,
+#' so it's possible that not every package required to run your application will
+#' be detected.
+#'
+#' For example, ggplot2's `geom_hex()` requires the hexbin package to be
+#' installed, but it is only suggested by ggplot2. So if you app uses
+#' `geom_hex()` it will fail, reporting that the hexbin package is not
+#' installed.
+#'
+#' You can overcome this problem with (e.g.) `requireNamespace(hexbin)`.
+#' This will tell rsconnect that your app needs the hexbin package, without
+#' otherwise affecting your code.
+#'
+#' @inheritParams listDeploymentFiles
 #' @param appDir Directory containing application. Defaults to current working
 #'   directory.
-#' @return Returns a data frame listing the package
-#'   dependencies detected for the application: \tabular{ll}{ `package`
-#'   \tab Name of package \cr `version` \tab Version of package\cr }
-#' @details Dependencies are determined by parsing application source code and
-#'   looking for calls to `library`, `require`, `::`, and
-#'   `:::`.
+#' @returns A data frame with one row for each dependency (direct, indirect,
+#'   and inferred), and 4 columns:
 #'
-#'   Recursive dependencies are detected by examining the `Depends`,
-#'   `Imports`, and `LinkingTo` fields of the packages immediately
-#'   dependend on by the application.
-#'
-#' @note Since the `Suggests` field is not included when determining
-#'   recursive dependencies of packages, it's possible that not every package
-#'   required to run your application will be detected.
-#'
-#'   In this case, you can force a package to be included dependency by
-#'   inserting call(s) to `require` within your source directory. This code
-#'   need not actually execute, for example you could create a standalone file
-#'   named `dependencies.R` with the following code: \cr \cr
-#'   `require(xts)` \cr `require(colorspace)` \cr
-#'
-#'   This will force the `xts` and `colorspace` packages to be
-#'   installed along with the rest of your application when it is deployed.
+#'   * `Package`: package name.
+#'   * `Version`: local version.
+#'   * `Source`: a short string describing the source of the package install,
+#'      as described above.
+#'   * `Repository`: for CRAN and CRAN-like repositories, the URL to the
+#'      repository. This will be ignored by the server if it has been configured
+#'      with it's own repository name -> repository URL mapping.
 #' @examples
 #' \dontrun{
 #'
@@ -42,16 +110,49 @@
 #' @seealso [rsconnectPackages](Using Packages with rsconnect)
 #' @export
 appDependencies <- function(appDir = getwd(), appFiles = NULL) {
-  # if the list of files wasn't specified, generate it
-  if (is.null(appFiles)) {
-    appFiles <- bundleFiles(appDir)
+  appFiles <- listDeploymentFiles(appDir, appFiles)
+  appMetadata <- appMetadata(appDir, appFiles = appFiles)
+  if (!needsR(appMetadata)) {
+    return(data.frame(
+      Package = character(),
+      Version = character(),
+      Source = character(),
+      Repository = character(),
+      stringsAsFactors = FALSE
+    ))
   }
+
   bundleDir <- bundleAppDir(appDir, appFiles)
-  on.exit(unlink(bundleDir, recursive = TRUE), add = TRUE)
-  deps <- snapshotRDependencies(bundleDir)
-  data.frame(package = deps[, "Package"],
-             version = deps[, "Version"],
-             source = deps[, "Source"],
-             row.names = c(1:length(deps[, "Package"])),
-             stringsAsFactors = FALSE)
+  defer(unlink(bundleDir, recursive = TRUE))
+
+  extraPackages <- inferRPackageDependencies(appMetadata)
+  deps <- computePackageDependencies(bundleDir, extraPackages, quiet = TRUE)
+  deps[c("Package", "Version", "Source", "Repository")]
+}
+
+needsR <- function(appMetadata) {
+  if (appMetadata$appMode == "static") {
+    return(FALSE)
+  }
+
+  # All non-Quarto content currently uses R by default.
+  # Currently R is only supported by the "knitr" engine, not "jupyter" or
+  # "markdown"
+  is.null(appMetadata$quartoInfo) ||
+    "knitr" %in% appMetadata$quartoInfo[["engines"]]
+}
+
+inferRPackageDependencies <- function(appMetadata) {
+  deps <- switch(appMetadata$appMode,
+    "rmd-static" = c("rmarkdown", if (appMetadata$hasParameters) "shiny"),
+    "quarto-static" = "rmarkdown",
+    "quarto-shiny" = c("rmarkdown", "shiny"),
+    "rmd-shiny" = c("rmarkdown", "shiny"),
+    "shiny" = "shiny",
+    "api" = "plumber"
+  )
+  if (appMetadata$documentsHavePython) {
+    deps <- c(deps, "reticulate")
+  }
+  deps
 }

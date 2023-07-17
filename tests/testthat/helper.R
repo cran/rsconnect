@@ -1,12 +1,23 @@
+showDcf <- function(df) {
+  write.dcf(df, stdout())
+  invisible()
+}
 
 # last HTTP request made
 httpLastRequest <- list()
 
 # HTTP function which just saves the result for analysis
-httpTestRecorder <- function(protocol, host, port, method, path, headers,
-                             contentType = NULL, file = NULL, certificate = NULL,
-                             writer = NULL, timeout = NULL)
-{
+httpTestRecorder <- function(protocol,
+                             host,
+                             port,
+                             method,
+                             path,
+                             headers,
+                             contentType = NULL,
+                             file = NULL,
+                             certificate = NULL,
+                             writer = NULL,
+                             timeout = NULL) {
   httpLastRequest <<- list(
     protocol = protocol,
     host = host,
@@ -20,41 +31,101 @@ httpTestRecorder <- function(protocol, host, port, method, path, headers,
     writer = writer,
     timeout = timeout
   )
+
+  list(status = 200, content = "", contentType = "plain/text")
+}
+
+local_http_recorder <- function(env = caller_env()) {
+  withr::local_options(rsconnect.http = httpTestRecorder, .local_envir = env)
 }
 
 # Create and use a directory as temporary replacement for R_USER_CONFIG_DIR to
 # avoid having tests overwrite the "official" configuration locations.
-#
-# test_that("some test", {
-#   havingFakeConfig({
-#     take_some_action(...)
-#     expect_something(...)
-#   })
-# })
-#
-# This function is similar in purpose to the run_tests function in
-# ../testthat.R, but uses per-test replacement location rather than a single
-# replacement location across all tests.
-#
-# Use this function when test state needs to be isolated from other tests.
-havingFakeConfig <- function(expr) {
-  # Calculate and create temporary state location
-  temp_config_dir <- tempfile("config-")
-  dir.create(temp_config_dir)
+local_temp_config <- function(env = caller_env()) {
+  path <- withr::local_tempdir(.local_envir = env)
+  withr::local_envvar(R_USER_CONFIG_DIR = path, .local_envir = env)
+}
 
-  # Preserve incoming state
-  config <- Sys.getenv("R_USER_CONFIG_DIR")
+local_temp_app <- function(files = list(), env = caller_env()) {
+  dir <- withr::local_tempdir(.local_envir = env)
+
+  for (name in names(files)) {
+    content <- files[[name]]
+    writeLines(content, file.path(dir, name))
+  }
+
+  dir
+}
 
 
-  # Restore incoming state and remove temporary location on exit.
-  on.exit({
-    Sys.setenv(R_USER_CONFIG_DIR = config)
+local_shiny_bundle <- function(appName, appDir, appPrimaryDoc, python = NULL) {
+  appFiles <- bundleFiles(appDir)
+  appMetadata <- appMetadata(appDir, appFiles, appPrimaryDoc = appPrimaryDoc)
 
-    unlink(temp_config_dir, recursive = TRUE)
-  }, add = TRUE)
+  tarfile <- bundleApp(
+    appName,
+    appDir,
+    appFiles = appFiles,
+    appMetadata = appMetadata,
+    pythonConfig = pythonConfigurator(python),
+    quiet = TRUE
+  )
+  bundleTempDir <- tempfile()
+  utils::untar(tarfile, exdir = bundleTempDir)
+  unlink(tarfile)
 
-  # Use temporary state while testing to avoid manipulating the actual state.
-  Sys.setenv(R_USER_CONFIG_DIR = temp_config_dir)
+  defer(unlink(bundleTempDir, recursive = TRUE), env = caller_env())
+  bundleTempDir
+}
 
-  eval(expr)
+
+# Servers and accounts ----------------------------------------------------
+
+addTestAccount <- function(account = "ron", server = "example.com", userId = account) {
+  registerAccount(server, account, userId, apiKey = "123")
+  invisible()
+}
+
+addTestServer <- function(name = NULL, url = "https://example.com", certificate = NULL) {
+  if (is.null(name)) {
+    serverUrl <- parseHttpUrl(url)
+    name <- serverUrl$host
+  }
+
+  registerServer(
+    url = url,
+    name = name,
+    certificate = certificate
+  )
+  invisible()
+}
+addTestDeployment <- function(path,
+                              appName = "test",
+                              appTitle = "",
+                              appId = "123",
+                              account = "ron",
+                              envVars = NULL,
+                              username = account,
+                              server = "example.com",
+                              url = paste0("https://", server, "/", username, "/", appId),
+                              hostUrl = NULL,
+                              version = deploymentRecordVersion,
+                              metadata = list()) {
+  saveDeployment(
+    path,
+    createDeploymentTarget(
+      appName = appName,
+      appTitle = appTitle,
+      appId = appId,
+      envVars = envVars,
+      account = account,
+      username = username,
+      server = server,
+      version = version
+    ),
+    application = list(id = appId, url = url),
+    hostUrl = hostUrl,
+    metadata = metadata,
+    addToHistory = FALSE
+  )
 }

@@ -12,77 +12,107 @@ deployApp(
   appSourceDoc = NULL,
   appName = NULL,
   appTitle = NULL,
+  envVars = NULL,
   appId = NULL,
   contentCategory = NULL,
   account = NULL,
   server = NULL,
   upload = TRUE,
   recordDir = NULL,
-  launch.browser = getOption("rsconnect.launch.browser", interactive()),
+  launch.browser = getOption("rsconnect.launch.browser", is_interactive()),
   on.failure = NULL,
   logLevel = c("normal", "quiet", "verbose"),
   lint = TRUE,
   metadata = list(),
-  forceUpdate = getOption("rsconnect.force.update.apps", FALSE),
+  forceUpdate = NULL,
   python = NULL,
   forceGeneratePythonEnvironment = FALSE,
-  quarto = NULL,
+  quarto = NA,
   appVisibility = NULL,
   image = NULL
 )
 }
 \arguments{
-\item{appDir}{Directory containing application. Defaults to current working
-directory.}
+\item{appDir}{A directory containing an application (e.g. a Shiny app
+or plumber API). Defaults to the current directory.}
 
-\item{appFiles}{The files and directories to bundle and deploy (only if
-\code{upload = TRUE}). Can be \code{NULL}, in which case all the files in the
-directory containing the application are bundled, with the exception of
-any listed in an \code{.rscignore} file. Takes precedence over
-\code{appFileManifest} if both are supplied.}
-
-\item{appFileManifest}{An alternate way to specify the files to be deployed;
-a file containing the names of the files, one per line, relative to the
-\code{appDir}.}
+\item{appFiles, appFileManifest}{Use \code{appFiles} to specify a
+character vector of files to bundle in the app or \code{appManifestFiles}
+to provide a path to a file containing a list of such files. If neither
+are supplied, will bundle all files in \code{appDir}, apart from standard
+exclusions and files listed in a \code{.rscignore} file. See
+\code{\link[=listDeploymentFiles]{listDeploymentFiles()}} for more details.}
 
 \item{appPrimaryDoc}{If the application contains more than one document, this
 parameter indicates the primary one, as a path relative to \code{appDir}. Can be
 \code{NULL}, in which case the primary document is inferred from the contents
 being deployed.}
 
-\item{appSourceDoc}{If the application is composed of static files (e.g
-HTML), this parameter indicates the source document, if any, as a fully
-qualified path. Deployment information returned by \code{\link[=deployments]{deployments()}} is
-associated with the source document.}
+\item{appSourceDoc}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Please use
+\code{recordDir} instead.}
 
-\item{appName}{Name of application (names must be unique within an account).
-Defaults to the base name of the specified \code{appDir}.}
+\item{appName}{Application name, a string consisting of letters, numbers,
+\verb{_} and \code{-}. The application name is used to identify applications on a
+server, so much be unique.
+
+If not specified, the first deployment will be automatically it from the
+\code{appDir} for directory and website, and from the \code{appPrimaryDoc} for
+document. On subsequent deploys, it will use the previously stored value.}
 
 \item{appTitle}{Free-form descriptive title of application. Optional; if
-supplied, will often be displayed in favor of the name. When deploying a
-new application, you may supply only the \code{appTitle} to receive an
-auto-generated \code{appName}.}
+supplied, will often be displayed in favor of the name. If ommitted,
+on second and subsequent deploys, the title will be unchanged.}
 
-\item{appId}{If updating an application, the ID of the application being
-updated. Optional unless updating an app owned by another user.}
+\item{envVars}{A character vector giving the names of environment variables
+whose values should be synchronised with the server (currently supported by
+Connect only). The values of the environment variables are sent over an
+encrypted connection and are not stored in the bundle, making this a safe
+way to send private data to Connect.
+
+The names (not values) are stored in the deployment record so that future
+deployments will automatically update their values. Other environment
+variables on the server will not be affected. This means that removing an
+environment variable from \code{envVars} will leave it unchanged on the server.
+To remove it, either delete it using the Connect UI, or temporarily unset
+it (with \code{Sys.unsetenv()} or similar) then re-deploy.
+
+Environment variables are set prior to deployment so that your code
+can use them and the first deployment can still succeed. Note that means
+that if the deployment fails, the values will still be updated.}
+
+\item{appId}{Use this to deploy to an exact known application, ignoring all
+existing deployment records and \code{appName}.
+
+You can use this to update an existing application that is missing a
+deployment record. If you're re-deploying an application that you
+created it's generally easier to use \code{appName}; \code{appId} is best reserved
+for re-deploying apps created by someone else.
+
+You can find the \code{appId} in the following places:
+\itemize{
+\item On shinyapps.io, it's the \code{id} listed on the applications page.
+\item For Posit Connect, it's \code{guid} from the info tab on the content page.
+}}
 
 \item{contentCategory}{Optional; the kind of content being deployed (e.g.
 \code{"plot"} or \code{"site"}).}
 
-\item{account}{Account to deploy application to. This parameter is only
-required for the initial deployment of an application when there are
-multiple accounts configured on the system (see \link{accounts}).}
+\item{account, server}{Uniquely identify a remote server with either your
+user \code{account}, the \code{server} name, or both. If neither are supplied, and
+there are multiple options, you'll be prompted to pick one.
 
-\item{server}{Server name. Required only if you use the same account name on
-multiple servers.}
+Use \code{\link[=accounts]{accounts()}} to see the full list of available options.}
 
 \item{upload}{If \code{TRUE} (the default) then the application is uploaded from
 the local system prior to deployment. If \code{FALSE} then it is re-deployed
 using the last version that was uploaded. \code{FALSE} is only supported on
 shinyapps.io; \code{TRUE} is required on Posit Connect.}
 
-\item{recordDir}{Directory where publish record is written. Can be \code{NULL}
-in which case record will be written to the location specified with \code{appDir}.}
+\item{recordDir}{Directory where deployment record is written. The default,
+\code{NULL}, uses \code{appDir}, since this is usually where you want the deployment
+data to be stored. This argument is typically only needed when deploying
+a directory of static files since you want to store the record with the
+code that generated those files, not the files themselves.}
 
 \item{launch.browser}{If true, the system's default web browser will be
 launched automatically after the app is started. Defaults to \code{TRUE} in
@@ -103,9 +133,14 @@ potentially problematic code?}
 record. These fields will be returned on subsequent calls to
 \code{\link[=deployments]{deployments()}}.}
 
-\item{forceUpdate}{If \code{TRUE}, update any previously-deployed app without
-asking. If \code{FALSE}, ask to update. If unset, defaults to the value of
-\code{getOption("rsconnect.force.update.apps", FALSE)}.}
+\item{forceUpdate}{What should happen if there's no deployment record for
+the app, but there's an app with the same name on the server? If \code{TRUE},
+will always update the previously-deployed app. If \code{FALSE}, will ask
+the user what to do, or fail if not in an interactive context.
+
+Defaults to \code{TRUE} when called automatically by the IDE, and \code{FALSE}
+otherwise. You can override the default by setting option
+\code{rsconnect.force.update.apps}.}
 
 \item{python}{Full path to a python binary for use by \code{reticulate}.
 Required if \code{reticulate} is a dependency of the app being deployed.
@@ -118,11 +153,16 @@ installed in the environment.}
 \code{requirements.txt} file is found, it will be overwritten when this argument
 is \code{TRUE}.}
 
-\item{quarto}{Optional. Full path to a Quarto binary for use deploying Quarto
-content. The provided Quarto binary will be used to run \verb{quarto inspect}
-to gather information about the content.}
+\item{quarto}{Should the deployed content be built by quarto?
+(\code{TRUE}, \code{FALSE}, or \code{NA}). The default, \code{NA}, will use quarto if
+there are \code{.qmd} files in the bundle, or if there is a
+\verb{_quarto.yml} and \code{.Rmd} files.
 
-\item{appVisibility}{One of \code{NULL}, "private"\verb{, or }"public"\verb{; the visibility of the deployment. When }NULL`, no change to visibility is
+(This option is ignored and quarto will always be used if the
+\code{metadata} contains \code{quarto_version} and \code{quarto_engines} fields.)}
+
+\item{appVisibility}{One of \code{NULL}, \code{"private"}, or \code{"public"}; the
+visibility of the deployment. When \code{NULL}, no change to visibility is
 made. Currently has an effect only on deployments to shinyapps.io.}
 
 \item{image}{Optional. The name of the image to use when building and
@@ -133,6 +173,28 @@ attempt to choose an image based on the content requirements.}
 Deploy a \link[shiny:shiny-package]{shiny} application, an
 \link[rmarkdown:rmarkdown-package]{RMarkdown} document, a plumber API, or HTML
 content to a server.
+}
+\details{
+\subsection{Deployment records}{
+
+When deploying an app, \code{deployApp()} will save a deployment record that
+makes it easy to update the app on server from your local source code. This
+generally means that you need to only need to supply important arguments
+(e.g. \code{appName}, \code{appTitle}, \code{server}/\code{account}) on the first deploy, and
+rsconnect will reuse the same settings on subsequent deploys.
+
+The metadata needs to make this work is stored in \verb{\{appDir\}/rsconnect/}.
+You should generally check these files into version control to ensure that
+future you and other collaborators will publish to the same location.
+
+If you have lost this directory, all is not lost, as \code{deployApp()} will
+attempt to rediscover existing deployments. This is easiest if you are
+updating an app that you created, as you can just supply the \code{appName}
+(and \code{server}/\code{account} if you have multiple accounts) and \code{deployApp()}
+will find the existing application account. If you need to update an app
+that was created by someone else (that you have write permission) for, you'll
+instead need to supply the \code{appId}.
+}
 }
 \examples{
 \dontrun{
@@ -158,7 +220,7 @@ deployApp(launch.browser = FALSE)
 
 # deploy a Quarto website, using the quarto package to
 # find the Quarto binary
-deployApp("~/projects/quarto/site1", quarto = quarto::quarto_path())
+deployApp("~/projects/quarto/site1")
 }
 }
 \seealso{
