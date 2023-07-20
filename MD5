@@ -1,6 +1,6 @@
-97dbc8066a529c598c2057eec0d26ce5 *DESCRIPTION
+03669e80bc98a50c8365fb5b7fb97810 *DESCRIPTION
 58db9a9900841625ac822ff490a74ea0 *NAMESPACE
-75743a093850908c498764196e5db23a *NEWS.md
+85898dbed5a2d651edac0d070faf855c *NEWS.md
 b4e408d6e5998514e7f475e8c4a92d9f *R/account-find.R
 27754978620044eaa708aaf8ee1e4f0f *R/accounts.R
 729ea987c0b34808fc28b9ea94f70c9c *R/appDependencies.R
@@ -12,7 +12,7 @@ b35d8f9311c0770aa316c1868daa5140 *R/bundle.R
 bf6e55626df3e6ef54a8176a93d69f54 *R/bundleFiles.R
 a6a5c48bcb1324d6dd2f91037e3460cf *R/bundlePackage.R
 660cc9e12c46dcde121d326466d77ba6 *R/bundlePackagePackrat.R
-cbb174aedba3650f117231c17d8df797 *R/bundlePackageRenv.R
+43db486812044e69b63f139cc9236949 *R/bundlePackageRenv.R
 90409ce683565af2d44543a7e097c972 *R/bundlePython.R
 d45f273c2bb61f2d3fcfb9ebb472ba02 *R/certificates.R
 5f03df7e825be21e8e52576849a944fd *R/client-cloud.R
@@ -25,7 +25,7 @@ d4a2f66e197af37ce7c8650518b6a172 *R/configureApp.R
 e9c10c87cd1ed981e1b7d9a01b568ad7 *R/cookies.R
 03335c1fc361685890bf97c9959cc15b *R/deployAPI.R
 fa4f55a3a672f6909dcf1ea58e8729d7 *R/deployApp.R
-8b32ce75b9ca68685633840a92e066ec *R/deployDoc.R
+e5100efd160275bb32a0ff6af40e0c09 *R/deployDoc.R
 91c6496e2f4a074fd66e90873dd88cfe *R/deploySite.R
 ee7edd8d8bdc341de817e4133d98fa82 *R/deployTFModel.R
 197b7215f9cabc619cf34cecb444f027 *R/deploymentTarget.R
@@ -148,7 +148,7 @@ cf6fa968f3dd92d189b394f7e9f80902 *tests/testthat/_snaps/appMetadata-quarto.md
 5653ed01e209a7b9e4eb19191576f878 *tests/testthat/_snaps/applications.md
 c1fc1f71804fc2d5092d1129470f5b94 *tests/testthat/_snaps/bundle.md
 f6acb1651aca3933e0a584c42310b10e *tests/testthat/_snaps/bundleFiles.md
-e1efca981ea48d970f1256b066175414 *tests/testthat/_snaps/bundlePackage.md
+58c2414410ea67b8a6e17159016e2dd6 *tests/testthat/_snaps/bundlePackage.md
 d55d8f6de699fb2bddcb73bcd40514dd *tests/testthat/_snaps/bundlePackagePackrat.md
 fce16248e944fa4e43dbae00c5be4e3f *tests/testthat/_snaps/bundlePython.md
 e6a7dc199abad18c49f1bcf85331e6f5 *tests/testthat/_snaps/cookies.md
@@ -164,7 +164,7 @@ c684daf9aebb644999ac612aec05290f *tests/testthat/_snaps/deployments-find.md
 91f8d25cf144e338cde76677a1f4338c *tests/testthat/_snaps/linters.md
 3fca8a9f7869bf2186a8f0d6bc2abec8 *tests/testthat/_snaps/secret.md
 940bb21b0c25262220b99e0c4ebb89d1 *tests/testthat/_snaps/servers-deprec.md
-32ab83690d981ea43dc2a17cfdebb3e6 *tests/testthat/_snaps/servers.md
+df06aeb13137c211839f9e598efc0b53 *tests/testthat/_snaps/servers.md
 20f7d93d3e38ffe001a55352e7f5ee6b *tests/testthat/_snaps/writeManifest.md
 28358d7a7da5b98ef72f87ef9f7e3c71 *tests/testthat/certs/invalid.crt
 2119c1e4e48a07544a2620810c8d9fe0 *tests/testthat/certs/localhost.crt
@@ -224,9 +224,9 @@ f5684e37b32cbf6c8db54ba6470dc600 *tests/testthat/test-accounts.R
 092ca0329b8241984a21417f7fedd8c8 *tests/testthat/test-applications.R
 f408be13b76d4ae352e35ed9e2665447 *tests/testthat/test-bundle.R
 9bfdb4cc8a8e9cf397a76a39a967fbeb *tests/testthat/test-bundleFiles.R
-202af71f394817fc8f483da02a6eba29 *tests/testthat/test-bundlePackage.R
+d56420a8f07a631000add75b0a5c4cbb *tests/testthat/test-bundlePackage.R
 6b05ac235b25e48b72ca523c2784b13a *tests/testthat/test-bundlePackagePackrat.R
-9e72eca62e2af4ad9a8404bda95fcea6 *tests/testthat/test-bundlePackageRenv.R
+93965872c99cb7de18d485ba2878782e *tests/testthat/test-bundlePackageRenv.R
 abedc9ff59f329d049eccafa0d7d7d24 *tests/testthat/test-bundlePython.R
 f00bd6e1e2e7d0ff5c7172c810b78d8c *tests/testthat/test-cert.R
 a54137661ba9ec54204f8ce1622ae4a2 *tests/testthat/test-client-cloud.R
@@ -235,7 +235,7 @@ e6f16ffe5c534054d7ff7128b5e7e774 *tests/testthat/test-client-connect.R
 a4c3c684243fef42b1d3a7b2a2da955e *tests/testthat/test-config.R
 fb42cfee8b0669f0efddb60096d46e23 *tests/testthat/test-cookies.R
 da35aa871587c00abcc31731185b2250 *tests/testthat/test-deployApp.R
-628b98043fdb39c1f1d4fda7873dd5da *tests/testthat/test-deployDoc.R
+1f5cd07346ebd78991e7ac69cdd629ba *tests/testthat/test-deployDoc.R
 c8fd452277c9d3c534b7e80e5bac9d4a *tests/testthat/test-deploySite.R
 9e5e5a69aeb2a0250af95f76d3c3132a *tests/testthat/test-deploymentTarget.R
 39e86e3f1457853bb5f8ce4f7c6183e6 *tests/testthat/test-deployments-find.R
@@ -245,7 +245,7 @@ c8fd452277c9d3c534b7e80e5bac9d4a *tests/testthat/test-deploySite.R
 c9b76d1982e7d993c51e6eb72c945d34 *tests/testthat/test-http-libcurl.R
 d07996765ce6af1da9d23e20fcf349ac *tests/testthat/test-http-rcurl.R
 be4df1c9a8119dcf624d5e03551bf6cc *tests/testthat/test-http.R
-2f6afd1c98143170f3379a03bf0c41e9 *tests/testthat/test-ide.R
+85b201a7e9358938f89486dc16318763 *tests/testthat/test-ide.R
 d41d8cd98f00b204e9800998ecf8427e *tests/testthat/test-lint-framework.R
 aa46a3376729c25ac37bef832cd36c43 *tests/testthat/test-lint.R
 0480ccd71d2a7065d59ffa0c2cea2edb *tests/testthat/test-linters.R
@@ -259,8 +259,8 @@ a1e6b39036aa4e8b63b333e6318ec3db *tests/testthat/test-rmd-bad-case/index.Rmd
 f4fffcb3c1baaf6841f553e9aa7b1024 *tests/testthat/test-rmds/parameterized.Rmd
 27ed9400e0161011c22d821bcef6e96f *tests/testthat/test-rmds/simple.Rmd
 1019670988cc161cdd4fb04f9b5edb2f *tests/testthat/test-secret.R
-2aee85ca469e8be8f22d1e71ce663506 *tests/testthat/test-servers-deprec.R
-ebb883b8c13922706c3f8f345982e1d5 *tests/testthat/test-servers.R
+c4db546d2f7ef422079ee498de8bd7dc *tests/testthat/test-servers-deprec.R
+b0413fef913709b9a5b4b14856629b35 *tests/testthat/test-servers.R
 3d03aed29a634daf1098730366428231 *tests/testthat/test-shinyApp/test-shinyApp.tar.gz
 c907c603ffe887ac731f9710ea26a05e *tests/testthat/test-title.R
 b960b28373a3e34beaa92c7c27ac35ad *tests/testthat/test-utils.R

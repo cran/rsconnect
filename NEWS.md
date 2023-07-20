@@ -1,9 +1,19 @@
+# rsconnect 1.0.1
+
+* `deployDoc()` includes `.Rprofile`, `requirements.txt` and `renv.lock` when
+  deploying `.Rmd` or `.qmd`. These additional files are not included with
+  rendered HTML documents. (#919)
+
+* Explicit renv dependencies are preserved. (#916)
+
 # rsconnect 1.0.0
 
 ## New features
 
 * `deployApp()` and `deployDoc()` now support deploying static content to Posit
   Cloud. Static RMarkdown and Quarto content can be rendered server-side.
+
+* rsconnect requires renv 1.0.0.
 
 * `deployApp()` and `writeManifest()` now respect renv lock files, if present. 
   If you don't want to use these lockfiles, and instead return the previous 
