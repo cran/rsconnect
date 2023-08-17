@@ -1,3 +1,36 @@
+# rsconnect 1.0.2
+
+* Fixed redeployments to shinyapps.io where `appName` is provided, but no local
+  record of the deployment exists. (#932)
+
+* `deployApp()` and `writeManifest()` now error if your library and `renv.lock`
+  are out-of-sync. Previously it always used what was defined in the `renv.lock`
+  but that was (a) slow and (b) could lead to different results than what you
+  see when running locally (#930).
+
+* Deploying from an renv project includes the `renv.lock` in the bundle. A
+  manifest created for an renv project references the `renv.lock` in the
+  `manifest.json`. (#926)
+
+* Use the environment variable `RSCONNECT_PACKRAT` to analyze dependencies
+  using packrat, as was done prior to rsconnect-1.0.0. Use of the
+  `rsconnect.packrat` option is discouraged, as it is not effective when using
+  push-button deployment in the RStudio IDE. (#935)
+
+* The `renv.lock` is ignored when the `RSCONNECT_PACKRAT` environment variable
+  or the `rsconnect.packrat` option is set. (#936)
+
+* The content type is inferred by analyzing the set of top-level files. (#942)
+
+* `deployApp()` and `writeManifest()` accept an optional `appMode` argument.
+  Provide this argument if your project includes auxiliary files which mislead
+  the existing `appMode` inference. For example, if an HTML project includes
+  a downloadable Shiny `app.R`, that content will be assumed to be a Shiny
+  application even if that application is not meant to be run. (#948)
+
+* `appDependencies()` accepts an `appFileManifest` argument as an alternate
+  way of providing the target set of files.
+
 # rsconnect 1.0.1
 
 * `deployDoc()` includes `.Rprofile`, `requirements.txt` and `renv.lock` when

@@ -1,12 +1,12 @@
 appMetadata <- function(appDir,
-                        appFiles = NULL,
+                        appFiles,
                         appPrimaryDoc = NULL,
                         quarto = NA,
+                        appMode = NULL,
                         contentCategory = NULL,
-                        coerceStaticRmd = FALSE,
+                        isShinyappsServer = FALSE,
                         metadata = list()) {
 
-  appFiles <- listDeploymentFiles(appDir, appFiles)
   checkAppLayout(appDir, appPrimaryDoc)
 
   if (is_string(quarto)) {
@@ -27,19 +27,21 @@ appMetadata <- function(appDir,
     quarto <- TRUE
   }
 
-  # Generally we want to infer appPrimaryDoc from appMode, but there's one
-  # special case
-  if (!is.null(appPrimaryDoc) &&
-      tolower(tools::file_ext(appPrimaryDoc)) == "r") {
-    appMode <- "shiny"
-  } else {
-    # Inference only uses top-level files
-    rootFiles <- appFiles[dirname(appFiles) == "."]
-    appMode <- inferAppMode(
-      file.path(appDir, appFiles),
-      usesQuarto = quarto,
-      coerceStaticRmd = coerceStaticRmd
-    )
+  if (is.null(appMode)) {
+    # Generally we want to infer appPrimaryDoc from appMode, but there's one
+    # special case
+    if (!is.null(appPrimaryDoc) &&
+          tolower(tools::file_ext(appPrimaryDoc)) == "r") {
+      appMode <- "shiny"
+    } else {
+      # Inference only uses top-level files
+      rootFiles <- appFiles[dirname(appFiles) == "."]
+      appMode <- inferAppMode(
+        file.path(appDir, rootFiles),
+        usesQuarto = quarto,
+        isShinyappsServer = isShinyappsServer
+      )
+    }
   }
 
   appPrimaryDoc <- inferAppPrimaryDoc(
@@ -117,9 +119,9 @@ checkAppLayout <- function(appDir, appPrimaryDoc = NULL) {
 }
 
 # infer the mode of the application from files in the root dir
-inferAppMode <- function(absoluteAppFiles,
+inferAppMode <- function(absoluteRootFiles,
                          usesQuarto = NA,
-                         coerceStaticRmd = FALSE) {
+                         isShinyappsServer = FALSE) {
 
   matchingNames <- function(paths, pattern) {
     idx <- grepl(pattern, basename(paths), ignore.case = TRUE, perl = TRUE)
@@ -127,24 +129,24 @@ inferAppMode <- function(absoluteAppFiles,
   }
 
   # plumber API
-  plumberFiles <- matchingNames(absoluteAppFiles, "^(plumber|entrypoint).r$")
+  plumberFiles <- matchingNames(absoluteRootFiles, "^(plumber|entrypoint).r$")
   if (length(plumberFiles) > 0) {
     return("api")
   }
 
   # Shiny application using single-file app.R style.
-  appR <- matchingNames(absoluteAppFiles, "^app.r$")
+  appR <- matchingNames(absoluteRootFiles, "^app.r$")
   if (length(appR) > 0) {
     return("shiny")
   }
 
-  rmdFiles <- matchingNames(absoluteAppFiles, "\\.rmd$")
-  qmdFiles <- matchingNames(absoluteAppFiles, "\\.qmd$")
+  rmdFiles <- matchingNames(absoluteRootFiles, "\\.rmd$")
+  qmdFiles <- matchingNames(absoluteRootFiles, "\\.qmd$")
 
   if (is.na(usesQuarto)) {
     # Can't use _quarto.yml alone because it causes deployment failures for
     # static content: https://github.com/rstudio/rstudio/issues/11444
-    quartoYml <- matchingNames(absoluteAppFiles, "^_quarto.y(a)?ml$")
+    quartoYml <- matchingNames(absoluteRootFiles, "^_quarto.y(a)?ml$")
 
     usesQuarto <- length(qmdFiles) > 0 ||
       (length(quartoYml) > 0 && length(rmdFiles > 0))
@@ -167,7 +169,7 @@ inferAppMode <- function(absoluteAppFiles,
   # Shiny application using server.R; checked later than Rmd with shiny runtime
   # because server.R may contain the server code paired with a ShinyRmd and needs
   # to be run by rmarkdown::run (rmd-shiny).
-  serverR <- matchingNames(absoluteAppFiles, "^server.r$")
+  serverR <- matchingNames(absoluteRootFiles, "^server.r$")
   if (length(serverR) > 0) {
     return("shiny")
   }
@@ -178,10 +180,9 @@ inferAppMode <- function(absoluteAppFiles,
     if (usesQuarto) {
       return("quarto-static")
     } else {
-      # For Shinyapps and posit.cloud, treat "rmd-static" app mode as "rmd-shiny" so that
-      # they can be served from a shiny process in Connect until we have better support of
-      # rmarkdown static content
-      if (coerceStaticRmd) {
+      # For shinyapps.io, treat "rmd-static" app mode as "rmd-shiny" so that
+      # it can be served from a shiny process in Connect
+      if (isShinyappsServer) {
         return("rmd-shiny")
       }
       return("rmd-static")

@@ -33,7 +33,7 @@ test_that("works with BioC packages", {
   )))
   withr::local_options(repos = c(
     CRAN = "https://cran.rstudio.com",
-    BioC = "https://bioconductor.org/packages/3.16/bioc"
+    BioC = "https://bioconductor.org/packages/release/bioc"
   ))
   expect_no_condition(
     deps <- snapshotRenvDependencies(app),
@@ -41,7 +41,7 @@ test_that("works with BioC packages", {
   )
   Biobase <- deps[deps$Package == "Biobase", ]
   expect_equal(Biobase$Source, "Bioconductor")
-  expect_equal(Biobase$Repository, "https://bioconductor.org/packages/3.16/bioc")
+  expect_equal(Biobase$Repository, "https://bioconductor.org/packages/release/bioc")
 
   withr::local_options(repos = c(
     CRAN = "https://cran.rstudio.com"
@@ -70,6 +70,17 @@ test_that("gets DESCRIPTION from renv & system libraries", {
   expect_type(deps$description, "list")
   expect_type(deps$description[[which(deps$Package == "foreign")]], "list")
   expect_type(deps$description[[which(deps$Package == "MASS")]], "list")
+})
+
+
+test_that("errors if library and project are inconsistent", {
+  withr::local_options(renv.verbose = FALSE)
+
+  app_dir <- local_temp_app(list("foo.R" = "library(foreign); library(MASS)"))
+  renv::snapshot(app_dir, prompt = FALSE)
+  renv::record("MASS@0.1.1", project = app_dir)
+
+  expect_snapshot(parseRenvDependencies(app_dir), error = TRUE)
 })
 
 # standardizeRenvPackage -----------------------------------------

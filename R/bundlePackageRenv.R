@@ -34,24 +34,18 @@ parseRenvDependencies <- function(bundleDir, snapshot = FALSE) {
     return(data.frame())
   }
 
-  if (snapshot) {
-    # Can use system libraries
-    deps$description <- lapply(deps$Package, package_record)
-  } else {
-    old <- options(renv.verbose = FALSE)
-    defer(options(old))
+  deps$description <- lapply(deps$Package, package_record)
 
-    # Generate a library from the lockfile
-    lib_dir <- dirCreate(file.path(bundleDir, "renv_library"))
-    renv::restore(bundleDir, library = lib_dir, prompt = FALSE)
-    defer(unlink(lib_dir, recursive = TRUE))
+  if (!snapshot) {
+    lib_versions <- unlist(lapply(deps$description, "[[", "Version"))
 
-    deps$description <- lapply(
-      deps$Package,
-      package_record,
-      # Ensure we fall back to system libraries
-      lib_dir = c(lib_dir, .libPaths())
-    )
+    if (any(deps$Version != lib_versions)) {
+      cli::cli_abort(c(
+        "Library and lockfile are out of sync",
+        i = "Use renv::restore() or renv::snapshot() to synchronise",
+        i = "Or ignore the lockfile by adding to your .rscignore"
+      ))
+    }
   }
 
   deps
@@ -89,7 +83,7 @@ standardizeRenvPackage <- function(pkg,
   }
 
   if (pkg$Source == "Repository") {
-    if (pkg$Repository == "CRAN") {
+    if (identical(pkg$Repository, "CRAN")) {
       if (isDevVersion(pkg, availablePackages)) {
         pkg$Source <- NA_character_
         pkg$Repository <- NA_character_
@@ -136,7 +130,9 @@ renvLockFile <- function(bundleDir) {
   file.path(bundleDir, "renv.lock")
 }
 
-removeRenv <- function(path) {
-  unlink(renvLockFile(path))
+removeRenv <- function(path, lockfile = TRUE) {
+  if (lockfile) {
+    unlink(renvLockFile(path))
+  }
   unlink(file.path(path, "renv"), recursive = TRUE)
 }

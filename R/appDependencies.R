@@ -58,7 +58,7 @@
 #'   have source `CORPORATE`. Posit Connect
 #'   [can be configured](https://docs.posit.co/connect/admin/appendix/configuration/#RPackageRepository)
 #'   to override their repository url so that (e.g.) you can use different
-#'   packages versions on stagning and production servers.
+#'   packages versions on staging and production servers.
 #'
 #' * Packages installed from GitHub, GitLab, or BitBucket, have `Source`
 #'   `github`, `gitlab`, and `bitbucket` respectively. When deployed, the
@@ -77,7 +77,7 @@
 #' be detected.
 #'
 #' For example, ggplot2's `geom_hex()` requires the hexbin package to be
-#' installed, but it is only suggested by ggplot2. So if you app uses
+#' installed, but it is only suggested by ggplot2. So if your app uses
 #' `geom_hex()` it will fail, reporting that the hexbin package is not
 #' installed.
 #'
@@ -85,9 +85,7 @@
 #' This will tell rsconnect that your app needs the hexbin package, without
 #' otherwise affecting your code.
 #'
-#' @inheritParams listDeploymentFiles
-#' @param appDir Directory containing application. Defaults to current working
-#'   directory.
+#' @inheritParams deployApp
 #' @returns A data frame with one row for each dependency (direct, indirect,
 #'   and inferred), and 4 columns:
 #'
@@ -97,7 +95,7 @@
 #'      as described above.
 #'   * `Repository`: for CRAN and CRAN-like repositories, the URL to the
 #'      repository. This will be ignored by the server if it has been configured
-#'      with it's own repository name -> repository URL mapping.
+#'      with its own repository name -> repository URL mapping.
 #' @examples
 #' \dontrun{
 #'
@@ -109,9 +107,12 @@
 #' }
 #' @seealso [rsconnectPackages](Using Packages with rsconnect)
 #' @export
-appDependencies <- function(appDir = getwd(), appFiles = NULL) {
-  appFiles <- listDeploymentFiles(appDir, appFiles)
-  appMetadata <- appMetadata(appDir, appFiles = appFiles)
+appDependencies <- function(appDir = getwd(),
+                            appFiles = NULL,
+                            appFileManifest = NULL,
+                            appMode = NULL) {
+  appFiles <- listDeploymentFiles(appDir, appFiles, appFileManifest)
+  appMetadata <- appMetadata(appDir, appFiles = appFiles, appMode = appMode)
   if (!needsR(appMetadata)) {
     return(data.frame(
       Package = character(),

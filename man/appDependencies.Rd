@@ -4,14 +4,31 @@
 \alias{appDependencies}
 \title{Detect application dependencies}
 \usage{
-appDependencies(appDir = getwd(), appFiles = NULL)
+appDependencies(
+  appDir = getwd(),
+  appFiles = NULL,
+  appFileManifest = NULL,
+  appMode = NULL
+)
 }
 \arguments{
-\item{appDir}{Directory containing application. Defaults to current working
-directory.}
+\item{appDir}{A directory containing an application (e.g. a Shiny app
+or plumber API). Defaults to the current directory.}
 
-\item{appFiles}{A character vector giving relative paths to the files to
-include in the deployed bundle.}
+\item{appFiles, appFileManifest}{Use \code{appFiles} to specify a
+character vector of files to bundle in the app or \code{appManifestFiles}
+to provide a path to a file containing a list of such files. If neither
+are supplied, will bundle all files in \code{appDir}, apart from standard
+exclusions and files listed in a \code{.rscignore} file. See
+\code{\link[=listDeploymentFiles]{listDeploymentFiles()}} for more details.}
+
+\item{appMode}{Optional; the type of content being deployed.
+Provide this option when the inferred type of content is incorrect. This
+can happen, for example, when static HTML content includes a downloadable
+Shiny application \code{app.R}. Accepted values include \code{"shiny"}, \code{"api"},
+\code{"rmd-static"}, \code{"rmd-shiny"}, \code{"quarto-static"}, \code{"quarto-shiny"}, and
+\code{"static"}. The Posit Connect API Reference contains a full set of
+available values. Not all servers support all types of content.}
 }
 \value{
 A data frame with one row for each dependency (direct, indirect,
@@ -23,7 +40,7 @@ and inferred), and 4 columns:
 as described above.
 \item \code{Repository}: for CRAN and CRAN-like repositories, the URL to the
 repository. This will be ignored by the server if it has been configured
-with it's own repository name -> repository URL mapping.
+with its own repository name -> repository URL mapping.
 }
 }
 \description{
@@ -80,7 +97,7 @@ Then packages installed from your corporate package repository will
 have source \code{CORPORATE}. Posit Connect
 \href{https://docs.posit.co/connect/admin/appendix/configuration/#RPackageRepository}{can be configured}
 to override their repository url so that (e.g.) you can use different
-packages versions on stagning and production servers.
+packages versions on staging and production servers.
 \item Packages installed from GitHub, GitLab, or BitBucket, have \code{Source}
 \code{github}, \code{gitlab}, and \code{bitbucket} respectively. When deployed, the
 bundle contains the additional metadata needed to precisely recreated
@@ -99,7 +116,7 @@ so it's possible that not every package required to run your application will
 be detected.
 
 For example, ggplot2's \code{geom_hex()} requires the hexbin package to be
-installed, but it is only suggested by ggplot2. So if you app uses
+installed, but it is only suggested by ggplot2. So if your app uses
 \code{geom_hex()} it will fail, reporting that the hexbin package is not
 installed.
 
