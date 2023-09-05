@@ -1,3 +1,26 @@
+# rsconnect 1.1.0
+
+* Fixed analysis of directories that were smaller than the
+  `rsconnect.max.bundle.files=10000` limit but larger than the
+  `renv.config.dependencies.limit=1000` limit. (#968)
+
+* Ignore `.env`, `.venv`, and `venv` files only when they reference Python
+  virtual environments. (#972)
+  
+* `deployApp()` and `writeManifest()` accept optional `envManagement`,
+  `envManagementR`, and `envManagementPy` arguments. These args specify whether
+  Posit Connect should install packages in the package cache.
+  If `envManagement` is `FALSE` then Connect will not perform any package
+  installation and it is the administrator's responsibility to ensure the
+  required R/Python packages are available in the runtime environment. This is
+  especially useful if off-host execution is enabled, when the execution
+  environment (specified by the `image` argument) already contains the required
+  packages. These values are ignored when
+  `Applications.ManifestEnvironmentManagementSelection = false`.
+  Requires Posit Connect `>=2023.07.0`. (#977)
+
+* Fix account discovery by `showProperties()`. (#980)
+
 # rsconnect 1.0.2
 
 * Fixed redeployments to shinyapps.io where `appName` is provided, but no local
@@ -198,7 +221,7 @@
 
 * `deployApp()` excludes temporary backup files (names starting or ending 
   with `~`) when automatically determining files to bundle (#111) as well as 
-  directories that are likely to be python virtual environments (#632). 
+  directories that are likely to be Python virtual environments (#632). 
   Additionally, ignore rules are always now applied to all directories; 
   previously some (like `.Rproj.user` and `"manifest.json"`) were only 
   applied to the root directory. It correctly handles `.rscignore`  files 
