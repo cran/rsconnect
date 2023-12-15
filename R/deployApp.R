@@ -112,6 +112,9 @@
 #' @param metadata Additional metadata fields to save with the deployment
 #'   record. These fields will be returned on subsequent calls to
 #'   [deployments()].
+#'
+#'   Multi-value fields are recorded as comma-separated values and returned in
+#'   that form. Custom value serialization is the responsibility of the caller.
 #' @param forceUpdate What should happen if there's no deployment record for
 #'   the app, but there's an app with the same name on the server? If `TRUE`,
 #'   will always update the previously-deployed app. If `FALSE`, will ask
@@ -194,6 +197,10 @@
 #' # deploy a Quarto website, using the quarto package to
 #' # find the Quarto binary
 #' deployApp("~/projects/quarto/site1")
+#'
+#' # deploy application with environment variables
+#' # (e.g., `SECRET_PASSWORD=XYZ` is set via an ~/.Renviron file)
+#' rsconnect::deployApp(envVars = c("SECRET_PASSWORD"))
 #' }
 #' @seealso [applications()], [terminateApp()], and [restartApp()]
 #' @family Deployment functions
@@ -322,60 +329,48 @@ deployApp <- function(appDir = getwd(),
     cli::cli_rule("Preparing for deployment")
   }
 
-  # determine the deployment target and target account info
-  recordPath <- findRecordPath(appDir, recordDir, appPrimaryDoc)
-  if (!is.null(appId) && is.null(appName)) {
-    # User has supplied only appId, so retrieve app data from server
-    # IDE supplies both appId and appName so should never hit this branch
-    target <- deploymentTargetForApp(
-      appId = appId,
-      appTitle = appTitle,
-      account = account,
-      server = server
-    )
-  } else {
-    forceUpdate <- forceUpdate %||% getOption("rsconnect.force.update.apps") %||%
-      fromIDE()
+  forceUpdate <- forceUpdate %||% getOption("rsconnect.force.update.apps") %||% fromIDE()
 
-    # Use name/account/server to look up existing deployment;
-    # create new deployment if no match found
-    target <- deploymentTarget(
-      recordPath = recordPath,
-      appId = appId,
-      appName = appName,
-      appTitle = appTitle,
-      envVars = envVars,
-      account = account,
-      server = server,
-      forceUpdate = forceUpdate
-    )
-  }
-  if (is.null(target$appId)) {
-    dest <- accountLabel(target$username, target$server)
-    taskComplete(quiet, "Deploying {.val {target$appName}} to {.val {dest}}")
+  # determine the target deployment record and deploying account
+  recordPath <- findRecordPath(appDir, recordDir, appPrimaryDoc)
+  target <- findDeploymentTarget(
+    recordPath = recordPath,
+    appId = appId,
+    appName = appName,
+    appTitle = appTitle,
+    envVars = envVars,
+    account = account,
+    server = server,
+    forceUpdate = forceUpdate
+  )
+  accountDetails <- target$accountDetails
+  deployment <- target$deployment
+
+  if (is.null(deployment$appId)) {
+    dest <- accountLabel(accountDetails$name, accountDetails$server)
+    taskComplete(quiet, "Deploying {.val {deployment$name}} using {.val {dest}}")
   } else {
-    dest <- accountLabel(target$username, target$server)
-    taskComplete(quiet, "Re-deploying {.val {target$appName}} to {.val {dest}}")
+    dest <- accountLabel(accountDetails$name, accountDetails$server)
+    taskComplete(quiet, "Re-deploying {.val {deployment$name}} using {.val {dest}}")
   }
 
   # Run checks prior to first saveDeployment() to avoid errors that will always
   # prevent a successful upload from generating a partial deployment
-  if (!isCloudServer(target$server) && identical(upload, FALSE)) {
+  if (!isCloudServer(accountDetails$server) && identical(upload, FALSE)) {
     # it is not possible to deploy to Connect without uploading
     stop("Posit Connect does not support deploying without uploading. ",
          "Specify upload=TRUE to upload and re-deploy your application.")
   }
-  if (!isConnectServer(target$server) && length(envVars) > 1) {
+  if (!isConnectServer(accountDetails$server) && length(envVars) > 1) {
     cli::cli_abort("{.arg envVars} only supported for Posit Connect servers")
   }
 
-  accountDetails <- accountInfo(target$account, target$server)
   client <- clientForAccount(accountDetails)
   if (verbose) {
     showCookies(serverInfo(accountDetails$server)$url)
   }
 
-  isShinyappsServer <- isShinyappsServer(target$server)
+  isShinyappsServer <- isShinyappsServer(accountDetails$server)
 
   logger("Inferring App mode and parameters")
   appMetadata <- appMetadata(
@@ -389,11 +384,11 @@ deployApp <- function(appDir = getwd(),
     metadata = metadata
   )
 
-  if (is.null(target$appId)) {
+  if (is.null(deployment$appId)) {
     taskStart(quiet, "Creating application on server...")
     application <- client$createApplication(
-      target$appName,
-      target$appTitle,
+      deployment$name,
+      deployment$title,
       "shiny",
       accountDetails$accountId,
       appMetadata$appMode,
@@ -402,10 +397,10 @@ deployApp <- function(appDir = getwd(),
     )
     taskComplete(quiet, "Created application with id {.val {application$id}}")
   } else {
-    taskStart(quiet, "Looking up application with id {.val {target$appId}}...")
+    taskStart(quiet, "Looking up application with id {.val {deployment$appId}}...")
     application <- tryCatch(
       {
-        application <- client$getApplication(target$appId, target$version)
+        application <- client$getApplication(deployment$appId, deployment$version)
         taskComplete(quiet, "Found application {.url {application$url}}")
 
         if (identical(application$type, "static")) {
@@ -415,7 +410,7 @@ deployApp <- function(appDir = getwd(),
         application
       },
       rsconnect_http_404 = function(err) {
-        application <- applicationDeleted(client, target, recordPath, appMetadata)
+        application <- applicationDeleted(client, deployment, recordPath, appMetadata)
         taskComplete(quiet, "Created application with id {.val {application$id}}")
         application
       }
@@ -423,7 +418,7 @@ deployApp <- function(appDir = getwd(),
   }
   saveDeployment(
     recordPath,
-    target = target,
+    deployment = deployment,
     application = application,
     metadata = metadata
   )
@@ -438,9 +433,9 @@ deployApp <- function(appDir = getwd(),
     )
     taskComplete(quiet, "Visibility updated")
   }
-  if (length(target$envVars) > 0) {
+  if (length(deployment$envVars) > 0) {
     taskStart(quiet, "Updating environment variables {envVars}...")
-    client$setEnvVars(application$guid, target$envVars)
+    client$setEnvVars(application$guid, deployment$envVars)
     taskComplete(quiet, "Environment variables updated")
   }
 
@@ -450,7 +445,7 @@ deployApp <- function(appDir = getwd(),
 
     taskStart(quiet, "Bundling {length(appFiles)} file{?s}: {.file {appFiles}}")
     bundlePath <- bundleApp(
-      appName = target$appName,
+      appName = deployment$name,
       appDir = appDir,
       appFiles = appFiles,
       appMetadata = appMetadata,
@@ -476,7 +471,7 @@ deployApp <- function(appDir = getwd(),
 
     saveDeployment(
       recordPath,
-      target = target,
+      deployment = deployment,
       application = application,
       bundleId = bundle$id,
       metadata = metadata
@@ -581,7 +576,7 @@ runDeploymentHook <- function(appDir, option, verbose = FALSE) {
   hook(appDir)
 }
 
-applicationDeleted <- function(client, target, recordPath, appMetadata) {
+applicationDeleted <- function(client, deployment, recordPath, appMetadata) {
   header <- "Failed to find existing application on server; it's probably been deleted."
   not_interactive <- c(
     i = "Use {.fn forgetDeployment} to remove outdated record and try again.",
@@ -598,16 +593,16 @@ applicationDeleted <- function(client, target, recordPath, appMetadata) {
 
   path <- deploymentConfigFile(
     recordPath,
-    target$appName,
-    target$account,
-    target$server
+    deployment$name,
+    deployment$account,
+    deployment$server
   )
   unlink(path)
 
-  accountDetails <- accountInfo(target$account, target$server)
+  accountDetails <- accountInfo(deployment$account, deployment$server)
   client$createApplication(
-    target$appName,
-    target$appTitle,
+    deployment$name,
+    deployment$title,
     "shiny",
     accountDetails$accountId,
     appMetadata$appMode
@@ -669,12 +664,6 @@ bundleApp <- function(appName,
   bundlePath <- tempfile("rsconnect-bundle", fileext = ".tar.gz")
   writeBundle(bundleDir, bundlePath)
   bundlePath
-}
-
-getAppByName <- function(client, accountInfo, name) {
-  # NOTE: returns a list with 0 or 1 elements
-  app <- client$listApplications(accountInfo$accountId, filters = list(name = name))
-  if (length(app)) app[[1]] else NULL
 }
 
 validURL <- function(url) {

@@ -1,3 +1,24 @@
+# rsconnect 1.2.0
+
+* Addressed a number of republishing and collaboration issues where the
+  content was incorrectly published to a new location rather than reusing an
+  existing deployment. (#981, #1007, #1013, #1019)
+
+* `showLogs()`, `configureApp()`, `setProperty()`, and `unsetProperty()`
+  search for the application by name when there are no matching deployment
+  records. (#985, #989)
+
+* `rpubsUpload()` correctly records the initial RPubs destination, allowing
+  republishing. (#976)
+
+* `deployApp()` and friends record multi-value `metadata` entries as
+  comma-separated values. (#1017)
+
+* `accountInfo()` includes `name` and `username` fields. Older versions of
+  rsconnect store account records with a `username` field. Recent rsconnect
+  versions record `name`. Both `name` and `username` should contain the same
+  value. (#1024)
+
 # rsconnect 1.1.1
 
 * Added `space` parameter to deploy directly to a space in Posit Cloud.
