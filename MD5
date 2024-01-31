@@ -1,10 +1,10 @@
-68606045302c2781878a22f3b26d24be *DESCRIPTION
+f0e1560ef6e3d4f701834e6c79d4f509 *DESCRIPTION
 b55cd0e3ffdca029c0817270fcfd8084 *NAMESPACE
-17b0ead0622129c20f95ed948264918f *NEWS.md
+907d672e3b5e05bdf1453fe21583c74c *NEWS.md
 b18067e85fd7c9727390f198eb90f92e *R/account-find.R
 dd95690ae7af8db36e2e221319619a78 *R/accounts.R
 a27d82bd834abc6982f2b572bff8cf8d *R/appDependencies.R
-bec754a82dc2973420eb484ff14300c7 *R/appMetadata-quarto.R
+8fe8239cb6002352eedd8aa6ff3a0b9f *R/appMetadata-quarto.R
 8da4afb0188469d7e52e64791a090e38 *R/appMetadata.R
 a9de5a16cd3d6534ee8c8e7c4414a149 *R/applications.R
 83f12a46dc1408d27ae64935eb2bbde8 *R/auth.R
@@ -12,7 +12,7 @@ a9de5a16cd3d6534ee8c8e7c4414a149 *R/applications.R
 f13531b8c0a9cb918b0924d71a3aa718 *R/bundleFiles.R
 c230b4f1cf0cbd05da0a2d38150d8b23 *R/bundlePackage.R
 660cc9e12c46dcde121d326466d77ba6 *R/bundlePackagePackrat.R
-b2abf5ad6394286f986adada8047d4c1 *R/bundlePackageRenv.R
+ca1c85c3de445d292c7269393b3853aa *R/bundlePackageRenv.R
 90409ce683565af2d44543a7e097c972 *R/bundlePython.R
 d45f273c2bb61f2d3fcfb9ebb472ba02 *R/certificates.R
 50b3f8363fcd40180692f5aba286798c *R/client-cloud.R
@@ -36,7 +36,7 @@ a33820530fa06e25273650698ef4d5bd *R/http-curl.R
 acd29383e178ec8475d319c09f6908dc *R/http-internal.R
 3f24d34ab0aa79e4cb5e71a8bac58c65 *R/http-libcurl.R
 5da03ce806e00789b60c2a07fcc84f01 *R/http-rcurl.R
-f9e26192f54319cdeaa84c46ceabb378 *R/http.R
+1f0ab669aa3bd6a8b777724ca0ce4f9c *R/http.R
 6c4772eff25f96cd06fb48143ef95b21 *R/ide.R
 8c5f08458cfd4e7f75a27924b2789c83 *R/import-standalone-obj-type.R
 5b49b9c463766fac246aaf38deb93504 *R/import-standalone-types-check.R
@@ -60,13 +60,13 @@ dee26321f4ce67bbb46d457443adc320 *R/usage.R
 dab1d18bb1b1d43fd33dbc8e62af62ab *R/utils-cli.R
 1d07cc2449a07f8f6f4ee9c0d6039daf *R/utils.R
 aa5294ab5224eb98fb8652dc10ae7c61 *R/writeManifest.R
-d74b64b4b3975dc8ecd264790e3c9436 *README.md
+d8d239f01d641507b26aafed49a4d009 *README.md
 43794bdeac721d782318bd8f2caec218 *build/vignette.rds
 2aeba46562a9b9117a9217520f67adc0 *inst/cert/cacert.pem
 2378364f2f7b529c5c5997413cd69d39 *inst/cert/shinyapps.io.pem
 34cdb8c94e7941cbdc7fae1bdd1c84e9 *inst/doc/custom-http.R
 ff7cda5df06795b98404748730db1f57 *inst/doc/custom-http.Rmd
-0e7b304448cf60ca002b5a0cbe2a0004 *inst/doc/custom-http.html
+8391160ebb5928092fa025af385c33e7 *inst/doc/custom-http.html
 dd9df5df88fdf07be178f552eda03d89 *inst/examples/diamonds/server.R
 1b276d13ac94663d12f7a2521755c6ab *inst/examples/diamonds/ui.R
 c4583de8a35d29910d6b24bcf5e1fb1d *inst/examples/sessioninfo/server.R
@@ -117,7 +117,7 @@ d959f03abd1347873a0d08a80a0d7d66 *man/removeAuthorizedUser.Rd
 fd7bda293474c8122268d540cb93ede8 *man/resendInvitation.Rd
 53ecaecb030968be567a5338330e3fe2 *man/restartApp.Rd
 c7e27d78d1cd7c0b92a200404ebb492f *man/rpubsUpload.Rd
-92b479112c77995bd838055e62583041 *man/rsconnect-package.Rd
+910b2fc9d5dd75ffb47327fe2d8451aa *man/rsconnect-package.Rd
 a3c3e1fce92b233f28b76ff7bef48ce4 *man/rsconnectConfigDir.Rd
 d2daf29dbd1c31cbfe1864a81278519d *man/rsconnectPackages.Rd
 a781b69f8d360ecf7558b36f7235bb7a *man/rsconnectProxies.Rd
@@ -144,7 +144,7 @@ f3d68c85eaac670b1f08cddc2336b062 *man/syncAppMetadata.Rd
 afbfedcf5b28461580f1dc0838aa14f3 *tests/testthat/_snaps/account-find.md
 7208e02a31e9213972a3d6c149e136a3 *tests/testthat/_snaps/accounts.md
 658a06866d867364349d3f5424e15ee0 *tests/testthat/_snaps/appDependencies.md
-cf6fa968f3dd92d189b394f7e9f80902 *tests/testthat/_snaps/appMetadata-quarto.md
+40784f3b40cbfb88f4de70ffc14dd886 *tests/testthat/_snaps/appMetadata-quarto.md
 ebe285b6d25f51dd313fcd304051c75b *tests/testthat/_snaps/appMetadata.md
 5653ed01e209a7b9e4eb19191576f878 *tests/testthat/_snaps/applications.md
 c1fc1f71804fc2d5092d1129470f5b94 *tests/testthat/_snaps/bundle.md
@@ -232,7 +232,7 @@ cafae18750ea211b29befe09d1036ab2 *tests/testthat/shinyapp-with-browser/server.R
 7b0051124c431c4ca17c3cfe73bdf689 *tests/testthat/test-account-find.R
 e2ccd88f1c27b7136d126d7227d72f51 *tests/testthat/test-accounts.R
 51cc42da45698c62d1df1dc20a5b7621 *tests/testthat/test-appDependencies.R
-560058d8e32ba9cb7b249d10b68940df *tests/testthat/test-appMetadata-quarto.R
+45834d7db3f60568c5268448bafe073e *tests/testthat/test-appMetadata-quarto.R
 2e4bf168e5850c249cc2ef206b954241 *tests/testthat/test-appMetadata.R
 092ca0329b8241984a21417f7fedd8c8 *tests/testthat/test-applications.R
 88428d57a6fbeacca159360c34ee0942 *tests/testthat/test-bundle.R
@@ -257,7 +257,7 @@ f4f14d27ca8970ffa46ec47b161dae11 *tests/testthat/test-deployments.R
 0605698a1d663edac0537ef04f6eddaf *tests/testthat/test-http-internal.R
 c9b76d1982e7d993c51e6eb72c945d34 *tests/testthat/test-http-libcurl.R
 d07996765ce6af1da9d23e20fcf349ac *tests/testthat/test-http-rcurl.R
-be4df1c9a8119dcf624d5e03551bf6cc *tests/testthat/test-http.R
+558f7875d69897ca6c51c173fa6365f3 *tests/testthat/test-http.R
 a51fd047805905accbfa608da4290fd5 *tests/testthat/test-ide.R
 aa46a3376729c25ac37bef832cd36c43 *tests/testthat/test-lint.R
 0480ccd71d2a7065d59ffa0c2cea2edb *tests/testthat/test-linters.R

@@ -2,7 +2,7 @@ Type: Package
 Package: rsconnect
 Title: Deploy Docs, Apps, and APIs to 'Posit Connect', 'shinyapps.io',
         and 'RPubs'
-Version: 1.2.0
+Version: 1.2.1
 Authors@R: c(
     person("Aron", "Atkins", , "aron@posit.co", role = c("aut", "cre")),
     person("Toph", "Allen", role = "aut"),
@@ -16,7 +16,8 @@ Description: Programmatic deployment interface for 'RPubs',
     Markdown documents, Shiny applications, Plumber APIs, plots, and
     static web content.
 License: GPL-2
-URL: https://github.com/rstudio/rsconnect
+URL: https://rstudio.github.io/rsconnect/,
+        https://github.com/rstudio/rsconnect
 BugReports: https://github.com/rstudio/rsconnect/issues
 Depends: R (>= 3.5.0)
 Imports: cli, curl, digest, jsonlite, lifecycle, openssl (>= 2.0.0),
@@ -30,9 +31,9 @@ Config/Needs/website: tidyverse/tidytemplate
 Config/testthat/edition: 3
 Config/testthat/parallel: true
 Encoding: UTF-8
-RoxygenNote: 7.2.3
+RoxygenNote: 7.3.1
 NeedsCompilation: no
-Packaged: 2023-12-14 22:20:58 UTC; aron
+Packaged: 2024-01-31 21:26:05 UTC; aron
 Author: Aron Atkins [aut, cre],
   Toph Allen [aut],
   Hadley Wickham [aut],
@@ -41,4 +42,4 @@ Author: Aron Atkins [aut, cre],
   Posit Software, PBC [cph, fnd]
 Maintainer: Aron Atkins <aron@posit.co>
 Repository: CRAN
-Date/Publication: 2023-12-15 03:20:02 UTC
+Date/Publication: 2024-01-31 22:00:07 UTC
