@@ -1,3 +1,20 @@
+# rsconnect 1.3.0
+
+* `deployApp(logLevel = "quiet")` suppresses Posit Connect deployment task
+  output. (#1051)
+
+* `deployApp(logLevel = "quiet")` and `writeManifest(quiet=TRUE)` suppress
+  output when using renv to analyze dependencies. (#1051)
+
+* `deployApp()` and `writeManifest()` receive the default value for the
+  `image` argument from the `RSCONNECT_IMAGE` environment variable. (#1063)
+
+* `deployTF()` can deploy a TensorFlow model to Posit Connect. Requires Posit
+  Connect 2024.05.0 or higher.
+
+* Skip tests when suggested packages are not available. Skip Quarto tests when
+  run by CRAN. (#1074)
+
 # rsconnect 1.2.2
 
 * Use internally computed SHA1 sums and PKI signing when SHA1 is disabled 

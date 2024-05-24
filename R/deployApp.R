@@ -27,7 +27,7 @@
 #' @param appDir A directory containing an application (e.g. a Shiny app
 #'   or plumber API). Defaults to the current directory.
 #' @param appFiles,appFileManifest Use `appFiles` to specify a
-#'   character vector of files to bundle in the app or `appManifestFiles`
+#'   character vector of files to bundle in the app or `appFileManifest`
 #'   to provide a path to a file containing a list of such files. If neither
 #'   are supplied, will bundle all files in `appDir`, apart from standard
 #'   exclusions and files listed in a `.rscignore` file. See
@@ -144,7 +144,8 @@
 #'   made. Currently has an effect only on deployments to shinyapps.io.
 #' @param image Optional. The name of the image to use when building and
 #'   executing this content. If none is provided, Posit Connect will
-#'   attempt to choose an image based on the content requirements.
+#'   attempt to choose an image based on the content requirements. You can
+#'   override the default by setting the environment variable `RSCONNECT_IMAGE`.
 #' @param envManagement Optional. Should Posit Connect install R and Python
 #'   packages for this content? (`TRUE`, `FALSE`, or `NULL`).
 #'   The default, `NULL`, will not write any values to the bundle manifest,

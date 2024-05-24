@@ -228,7 +228,30 @@ test_that("Deploying static content with _quarto.yaml succeeds without quartoInf
   expect_equal(manifest$metadata$appmode, "static")
 })
 
-test_that("Sets environment.image in the manifest if one is provided", {
+test_that("environment.image is not set when image is not provided", {
+  skip_on_cran()
+
+  withr::local_options(renv.verbose = TRUE)
+
+  appDir <- test_path("shinyapp-simple")
+
+  manifest <- makeManifest(appDir)
+  expect_null(manifest$environment)
+})
+
+test_that("TensorFlow models are identified", {
+  skip_on_cran()
+
+  app_dir <- local_temp_app(list(
+    "1/saved_model.pb" = "fake-saved-model"
+  ))
+  manifest <- makeManifest(app_dir)
+  expect_equal(manifest$metadata$appmode, "tensorflow-saved-model")
+  expect_null(manifest$packages)
+  expect_named(manifest$files, c("1/saved_model.pb"))
+})
+
+test_that("environment.image is set when image is provided", {
   skip_on_cran()
 
   withr::local_options(renv.verbose = TRUE)
@@ -237,9 +260,42 @@ test_that("Sets environment.image in the manifest if one is provided", {
 
   manifest <- makeManifest(appDir, image = "rstudio/content-base:latest")
   expect_equal(manifest$environment$image, "rstudio/content-base:latest")
+})
+
+test_that("environment.image is set and uses a provided image even when RSCONNECT_IMAGE is set", {
+  skip_on_cran()
+
+  withr::local_options(renv.verbose = TRUE)
+  withr::local_envvar(RSCONNECT_IMAGE = "rstudio/content-base:older")
+
+  appDir <- test_path("shinyapp-simple")
+
+  manifest <- makeManifest(appDir, image = "rstudio/content-base:latest")
+  expect_equal(manifest$environment$image, "rstudio/content-base:latest")
+})
+
+test_that("environment.image is not set when RSCONNECT_IMAGE is empty", {
+  skip_on_cran()
+
+  withr::local_options(renv.verbose = TRUE)
+  withr::local_envvar(RSCONNECT_IMAGE = "")
+
+  appDir <- test_path("shinyapp-simple")
 
   manifest <- makeManifest(appDir)
   expect_null(manifest$environment)
+})
+
+test_that("environment.image is set when RSCONNECT_IMAGE is nonempty", {
+  skip_on_cran()
+
+  withr::local_options(renv.verbose = TRUE)
+  withr::local_envvar(RSCONNECT_IMAGE = "rstudio/content-base:latest")
+
+  appDir <- test_path("shinyapp-simple")
+
+  manifest <- makeManifest(appDir)
+  expect_equal(manifest$environment$image, "rstudio/content-base:latest")
 })
 
 test_that("Sets environment.environment_management in the manifest if envManagement is defined", {
