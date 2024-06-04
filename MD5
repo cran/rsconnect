@@ -1,6 +1,6 @@
-d2d17cbaea0e2513fb1d69950f3194ed *DESCRIPTION
+989ad0b7b5977edbe51af50ce51a972c *DESCRIPTION
 b55cd0e3ffdca029c0817270fcfd8084 *NAMESPACE
-109be030ff26c10ad9081f8ad7188f66 *NEWS.md
+f4e57f5b6b9b2295de0987163c50f4cf *NEWS.md
 b18067e85fd7c9727390f198eb90f92e *R/account-find.R
 dd95690ae7af8db36e2e221319619a78 *R/accounts.R
 c3725f3f93c215fd67c5f830d4a24e36 *R/appDependencies.R
@@ -190,7 +190,6 @@ c377ea1f04daab9e355461a245efa429 *tests/testthat/packages/windows1251package/DES
 8b54e5a89fbda3af5e077053d40bec76 *tests/testthat/packages/windows1251package/NAMESPACE
 e5e0f10a3ef6eeab66ccbb80099ea1c5 *tests/testthat/packages/windows1251package/R/hello.R
 99567271980ebfdb87ea5653e5af0267 *tests/testthat/packages/windows1251package/man/hello.Rd
-7cec49988744201b8587102340e23b16 *tests/testthat/project-MASS/MASS.R
 3934e07d678ab1df32c048898d3e9441 *tests/testthat/quarto-doc-none/quarto-doc-none.qmd
 b3ae14e020bebd8a266e50b690b7ec15 *tests/testthat/quarto-proj-r-shiny/_quarto.yml
 58d6745717c2f4d942817eee0957ed31 *tests/testthat/quarto-proj-r-shiny/quarto-proj-r-shiny.qmd
@@ -238,9 +237,9 @@ e2ccd88f1c27b7136d126d7227d72f51 *tests/testthat/test-accounts.R
 092ca0329b8241984a21417f7fedd8c8 *tests/testthat/test-applications.R
 88428d57a6fbeacca159360c34ee0942 *tests/testthat/test-bundle.R
 b8dfd6d787ef423b0c74f397d43325ef *tests/testthat/test-bundleFiles.R
-d73b9cad74fbb0538a73b825d4846a28 *tests/testthat/test-bundlePackage.R
-ce7447ba446a0c5a9422c3194460c279 *tests/testthat/test-bundlePackagePackrat.R
-468c553699f3e9f5fdcde95600ba92f0 *tests/testthat/test-bundlePackageRenv.R
+75ccc4c6e5dfefe627c6027335862615 *tests/testthat/test-bundlePackage.R
+ade62a8d750015425bd35af40803622b *tests/testthat/test-bundlePackagePackrat.R
+e3c8b72cdef9178897928aae2311cb99 *tests/testthat/test-bundlePackageRenv.R
 abedc9ff59f329d049eccafa0d7d7d24 *tests/testthat/test-bundlePython.R
 f00bd6e1e2e7d0ff5c7172c810b78d8c *tests/testthat/test-cert.R
 b97cf2fb7b2c9b1974a6108ac0513aa9 *tests/testthat/test-client-cloud.R
@@ -277,5 +276,5 @@ f0144cce1c3713dd12ee70293148f74d *tests/testthat/test-servers.R
 3d03aed29a634daf1098730366428231 *tests/testthat/test-shinyApp/test-shinyApp.tar.gz
 c907c603ffe887ac731f9710ea26a05e *tests/testthat/test-title.R
 7bb23127b057846e2bf930e4e5da3f5d *tests/testthat/test-utils.R
-dcf7d50c0809a1957b8297cd9b4d89ed *tests/testthat/test-writeManifest.R
+d03b4dbf057744de7f07ff85525a65cd *tests/testthat/test-writeManifest.R
 ff7cda5df06795b98404748730db1f57 *vignettes/custom-http.Rmd
