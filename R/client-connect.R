@@ -102,32 +102,19 @@ connectClient <- function(service, authInfo) {
       GET(service, authInfo, paste0("/applications/", applicationId))
     },
 
-    ## Tasks API
-
-    listTasks = function() {
-      path <- "/tasks"
-      GET(service, authInfo, path)
-    },
-
-    getTask = function(taskId) {
-      path <- file.path("/tasks", taskId)
-      GET(service, authInfo, path)
-    },
-
-    killTask = function(taskId) {
-      path <- file.path("/tasks", taskId, "kill")
-      POST_JSON(service, authInfo, path, list())
-    },
-
     waitForTask = function(taskId, quiet = FALSE) {
-      start <- 0
+      first <- 0
+      wait <- 1
       while (TRUE) {
-        path <- paste0(file.path("/tasks", taskId), "?first_status=", start)
+        path <- paste0(
+          "/v1/tasks/", taskId,
+          "?first=", first,
+          "&wait=", wait)
         response <- GET(service, authInfo, path)
 
-        if (length(response$status) > 0) {
+        if (length(response$output) > 0) {
           if (!quiet) {
-            messages <- unlist(response$status)
+            messages <- unlist(response$output)
             messages <- stripConnectTimestamps(messages)
 
             # Made headers more prominent.
@@ -136,13 +123,12 @@ connectClient <- function(service, authInfo) {
             cat(paste0(messages, "\n", collapse = ""))
           }
 
-          start <- response$last_status
+          first <- response$last
         }
 
         if (length(response$finished) > 0 && response$finished) {
           return(response)
         }
-        Sys.sleep(1)
       }
     },
 

@@ -1,3 +1,17 @@
+# rsconnect 1.3.2
+
+* Primary Quarto document detection only considers `.R`, `.Rmd`, and `.qmd` as
+  end-of-file extensions. Previously, a file with `.R` elsewhere in its name,
+  such as `.Rprofile`, was incorrectly considered. (#1106)
+
+* Use the repository name identified by renv when `available.packages()` does
+  not enumerate the package, which occurs for archived packages. (#1110)
+
+* Remove remaining directory layout validation check. (#1102)
+
+* Use the public Connect server API endpoint `/v1/tasks/{id}` to poll task
+  progress. (#1088)
+
 # rsconnect 1.3.1
 
 * Skip tests when packages "foreign" and "MASS" are not available. (#1081)

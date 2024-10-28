@@ -15,14 +15,6 @@
       Error in `appMetadata()`:
       ! `quarto` must be `TRUE`, `FALSE`, or `NA`, not the number 1.
 
-# checkLayout() errors if primary doc & app.R
-
-    Code
-      checkAppLayout(dir, appPrimaryDoc = "myscript.R")
-    Condition
-      Error in `checkAppLayout()`:
-      ! Project must not contain both 'app.R' and a single-file Shiny app.
-
 # errors if no files with needed extension
 
     Code
@@ -48,11 +40,11 @@
     Condition
       Error in `inferAppPrimaryDoc()`:
       ! Failed to determine `appPrimaryDoc` for "quarto-static" content.
-      x No files matching "\\.(r|rmd|qmd)".
+      x No files matching "\\.(r|rmd|qmd)$".
     Code
       inferAppPrimaryDoc(NULL, "a.html", "quarto-shiny")
     Condition
       Error in `inferAppPrimaryDoc()`:
       ! Failed to determine `appPrimaryDoc` for "quarto-shiny" content.
-      x No files matching "\\.(rmd|qmd)".
+      x No files matching "\\.(rmd|qmd)$".
 

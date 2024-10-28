@@ -7,8 +7,6 @@ appMetadata <- function(appDir,
                         isShinyappsServer = FALSE,
                         metadata = list()) {
 
-  checkAppLayout(appDir, appPrimaryDoc)
-
   if (is_string(quarto)) {
     lifecycle::deprecate_warn(
       when = "1.0.0",
@@ -81,21 +79,6 @@ appMetadata <- function(appDir,
     documentsHavePython = documentsHavePython,
     quartoInfo = quartoInfo
   )
-}
-
-checkAppLayout <- function(appDir, appPrimaryDoc = NULL) {
-  appFilesBase <- tolower(list.files(appDir))
-  primaryIsRScript <- identical(tolower(tools::file_ext(appPrimaryDoc)), "r")
-
-  # check for single-file app collision
-  if (primaryIsRScript && "app.r" %in% appFilesBase) {
-    cli::cli_abort(
-      "Project must not contain both {.file app.R} and a single-file Shiny app."
-    )
-  }
-
-  # all other layouts are allowed; the server determines (with the required packages) if the content
-  # can be run/served.
 }
 
 # Infer the mode of the application from included files. Most content types
@@ -267,8 +250,8 @@ inferAppPrimaryDoc <- function(appPrimaryDoc, appFiles, appMode) {
   # determine expected primary document extension
   ext <- switch(appMode,
                 "static"        = "\\.html?$",
-                "quarto-static" = "\\.(r|rmd|qmd)",
-                "quarto-shiny"  = "\\.(rmd|qmd)",
+                "quarto-static" = "\\.(r|rmd|qmd)$",
+                "quarto-shiny"  = "\\.(rmd|qmd)$",
                 "\\.rmd$")
 
   # use index file if it exists

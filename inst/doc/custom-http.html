@@ -341,7 +341,6 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 
 <div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">library</span>(rsconnect)</span></code></pre></div>
-<p>custom-http.R</p>
 <p>Depending on the configuration of your environment, you may need to
 cutomize the way that rsconnect sends http requests. Typically, this is
 required for some special</p>
@@ -394,18 +393,15 @@ and values:</p>
 <span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a>    <span class="st">&quot;CustomHeader1&quot;</span> <span class="ot">=</span> <span class="st">&quot;CustomValue&quot;</span>, <span class="st">&quot;CustomHeader2&quot;</span> <span class="ot">=</span> <span class="st">&quot;CustomValue2&quot;</span></span>
 <span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a>  )</span>
 <span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a>)</span></code></pre></div>
-<p>custom-http.R</p>
 <p>While <code>rsconnect.http.cookies</code> expects cookies formatted
 the same way that a webserver expects them:</p>
 <div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="fu">options</span>(</span>
 <span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>  <span class="at">rsconnect.http.headers =</span> <span class="fu">c</span>(<span class="st">&quot;cookie1=value1&quot;</span>, <span class="st">&quot;cookie2=value2&quot;</span>)</span>
 <span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a>)</span></code></pre></div>
-<p>custom-http.R</p>
 <p>And you can supply other cookie parameters if needed:</p>
 <div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="fu">options</span>(</span>
 <span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a>  <span class="at">rsconnect.http.headers =</span> <span class="st">&quot;cookie1=value1; Expires=Thu, 31 Oct 2021 07:28:00 GMT; Secure&quot;</span></span>
 <span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a>)</span></code></pre></div>
-<p>custom-http.R</p>
 <p>The custom headers are set first, so will be overridden by the
 headers that rsconnect needs to correctly operate. Similarly, cookies
 will be set prior to the first request, and will be overriden by

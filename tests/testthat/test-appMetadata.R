@@ -65,51 +65,6 @@ test_that("content type (appMode) is inferred and can be overridden", {
 
 # checkLayout -------------------------------------------------------------
 
-test_that("checkLayout() errors if primary doc & app.R", {
-  dir <- local_temp_app(list(
-    "app.R" = "",
-    "myscript.R" = ""
-  ))
-
-  expect_snapshot(checkAppLayout(dir, appPrimaryDoc = "myscript.R"), error = TRUE)
-})
-
-test_that("checkLayout succeeds with some common app structures", {
-  rmd <- local_temp_app(list("foo.Rmd" = ""))
-  expect_no_error(checkAppLayout(rmd))
-
-  qmd <- local_temp_app(list("foo.qmd" = ""))
-  expect_no_error(checkAppLayout(qmd))
-
-  # perhaps script.R is a pre-render script that generates *.qmd
-  project <- local_temp_app(list("_quarto.yml" = "", "script.R" = ""))
-  expect_no_error(checkAppLayout(project))
-
-  md <- local_temp_app(list("_quarto.yml" = "", "index.md" = ""))
-  expect_no_error(checkAppLayout(md))
-
-  shiny1 <- local_temp_app(list("app.R" = ""))
-  expect_no_error(checkAppLayout(shiny1))
-
-  shiny2 <- local_temp_app(list("server.R" = "", "ui.R" = ""))
-  expect_no_error(checkAppLayout(shiny2))
-
-  api <- local_temp_app(list("plumber.R" = ""))
-  expect_no_error(checkAppLayout(api))
-
-  static <- local_temp_app(list("foo.html" = ""))
-  expect_no_error(checkAppLayout(static))
-
-  staticxml <- local_temp_app(list("data.xml" = ""))
-  expect_no_error(checkAppLayout(staticxml))
-
-  staticdata <- local_temp_app(list(
-    "data.txt" = "",
-    "cats.csv" = ""
-  ))
-  expect_no_error(checkAppLayout(staticdata))
-})
-
 # inferAppMode ------------------------------------------------------------
 
 test_that("can infer mode for API with plumber.R", {
@@ -263,9 +218,20 @@ test_that("uses index file if present", {
 })
 
 test_that("otherwise fails back to first file with matching extensions", {
-  files <- c("a.html", "b.html", "a.Rmd", "b.Rmd")
+  files <- c(".Rprofile", "a.html", "b.html", "a.Rmd", "b.Rmd")
   expect_equal(inferAppPrimaryDoc(NULL, files, "static"), "a.html")
+  expect_equal(inferAppPrimaryDoc(NULL, files, "rmd-static"), "a.Rmd")
   expect_equal(inferAppPrimaryDoc(NULL, files, "rmd-shiny"), "a.Rmd")
+  expect_equal(inferAppPrimaryDoc(NULL, files, "quarto-static"), "a.Rmd")
+  expect_equal(inferAppPrimaryDoc(NULL, files, "quarto-shiny"), "a.Rmd")
+})
+
+test_that("can use R, Rmd, and qmd files for Quarto modes", {
+  expect_equal(inferAppPrimaryDoc(NULL, c(".Rprofile", "foo.R"), "quarto-static"), "foo.R")
+  expect_equal(inferAppPrimaryDoc(NULL, c(".Rprofile", "foo.Rmd"), "quarto-static"), "foo.Rmd")
+  expect_equal(inferAppPrimaryDoc(NULL, c(".Rprofile", "foo.qmd"), "quarto-static"), "foo.qmd")
+  expect_equal(inferAppPrimaryDoc(NULL, c(".Rprofile", "foo.Rmd"), "quarto-shiny"), "foo.Rmd")
+  expect_equal(inferAppPrimaryDoc(NULL, c(".Rprofile", "foo.qmd"), "quarto-shiny"), "foo.qmd")
 })
 
 test_that("errors if no files with needed extension", {
