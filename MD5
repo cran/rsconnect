@@ -1,6 +1,6 @@
-545317924c4cf5b2b18a44c257fa02b3 *DESCRIPTION
+8870d34d30efecbcc3cc56c833f50550 *DESCRIPTION
 b55cd0e3ffdca029c0817270fcfd8084 *NAMESPACE
-c4c23c36fd7e30c6e1ee58b6b1bb9add *NEWS.md
+328dd2c6ae6f42db5564803073d46372 *NEWS.md
 b18067e85fd7c9727390f198eb90f92e *R/account-find.R
 dd95690ae7af8db36e2e221319619a78 *R/accounts.R
 c3725f3f93c215fd67c5f830d4a24e36 *R/appDependencies.R
@@ -257,7 +257,7 @@ f4f14d27ca8970ffa46ec47b161dae11 *tests/testthat/test-deployments.R
 49e321d2499107396fab0d0d7e1be6f3 *tests/testthat/test-http-internal.R
 8aaab3172a4fe6ce522356d8c2de864e *tests/testthat/test-http-libcurl.R
 3f8cff856f96b94ce7356c6cd0db1271 *tests/testthat/test-http-rcurl.R
-0317cfae718652f8e0555ce5f9c0188b *tests/testthat/test-http.R
+28165426157d1ea1143d195b2fdc1604 *tests/testthat/test-http.R
 e0160223ea6280cc4322e9d4cad4c2f9 *tests/testthat/test-ide.R
 aa46a3376729c25ac37bef832cd36c43 *tests/testthat/test-lint.R
 0480ccd71d2a7065d59ffa0c2cea2edb *tests/testthat/test-linters.R
