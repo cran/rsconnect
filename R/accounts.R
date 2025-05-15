@@ -54,7 +54,12 @@ accounts <- function(server = NULL) {
 #'   account.
 #' @family Account functions
 #' @export
-connectApiUser <- function(account = NULL, server = NULL, apiKey, quiet = FALSE) {
+connectApiUser <- function(
+  account = NULL,
+  server = NULL,
+  apiKey,
+  quiet = FALSE
+) {
   server <- findServer(server)
   user <- getAuthedUser(server, apiKey = apiKey)
 
@@ -72,12 +77,67 @@ connectApiUser <- function(account = NULL, server = NULL, apiKey, quiet = FALSE)
   invisible()
 }
 
+
+#' Register account on Posit Connect in Snowpark Container Services
+#'
+#' @description
+#' `connectSPCSUser()` connects your Posit Connect account to the rsconnect
+#' package so it can deploy and manage applications on your behalf.
+#' Configure a
+#' [`connections.toml` file](https://docs.snowflake.com/en/developer-guide/snowflake-cli/connecting/configure-cli#location-of-the-toml-configuration-fil)
+#' in the appropriate location.
+#'
+#'
+#' @inheritParams connectApiUser
+#' @param snowflakeConnectionName Name for the Snowflake connection parameters
+#'   stored in `connections.toml`.
+#' @export
+connectSPCSUser <- function(
+  account = NULL,
+  server = NULL,
+  snowflakeConnectionName,
+  quiet = FALSE
+) {
+  server <- findServer(server)
+  user <- getSPCSAuthedUser(server, snowflakeConnectionName)
+
+  registerAccount(
+    serverName = server,
+    accountName = account %||% user$username,
+    accountId = user$id,
+    snowflakeConnectionName = snowflakeConnectionName
+  )
+
+  if (!quiet) {
+    accountLabel <- accountLabel(user$username, server)
+    cli::cli_alert_success("Registered account for {accountLabel}")
+  }
+
+  invisible()
+}
+
+getSPCSAuthedUser <- function(server, snowflakeConnectionName) {
+  serverAddress <- serverInfo(server)
+  account <- list(
+    server = server,
+    snowflakeToken = getSnowflakeAuthToken(
+      serverAddress$url,
+      snowflakeConnectionName
+    )
+  )
+
+  client <- clientForAccount(account)
+  client$currentUser()
+}
+
 #' @rdname connectApiUser
 #' @export
-connectUser <- function(account = NULL,
-                        server = NULL,
-                        quiet = FALSE,
-                        launch.browser = getOption("rsconnect.launch.browser", interactive())) {
+connectUser <- function(
+  account = NULL,
+  server = NULL,
+  quiet = FALSE,
+  launch.browser = getOption("rsconnect.launch.browser", interactive())
+) {
   server <- findServer(server)
   resp <- getAuthTokenAndUser(server, launch.browser)
 
@@ -99,16 +159,21 @@ connectUser <- function(account = NULL,
 getAuthTokenAndUser <- function(server, launch.browser = TRUE) {
   token <- getAuthToken(server)
 
-  if (isTRUE(launch.browser))
+  if (isTRUE(launch.browser)) {
     utils::browseURL(token$claim_url)
-  else if (is.function(launch.browser))
+  } else if (is.function(launch.browser)) {
     launch.browser(token$claim_url)
+  }
 
   if (isFALSE(launch.browser)) {
     cli::cli_alert_warning("Open {.url {token$claim_url}} to authenticate")
   } else {
-    cli::cli_alert_info("A browser window should open to complete authentication")
-    cli::cli_alert_warning("If it doesn't open, please go to {.url {token$claim_url}}")
+    cli::cli_alert_info(
+      "A browser window should open to complete authentication"
+    )
+    cli::cli_alert_warning(
+      "If it doesn't open, please go to {.url {token$claim_url}}"
+    )
   }
 
   user <- waitForAuthedUser(
@@ -159,10 +224,12 @@ generateToken <- function() {
   )
 }
 
-waitForAuthedUser <- function(server,
-                              token = NULL,
-                              private_key = NULL,
-                              apiKey = NULL) {
+waitForAuthedUser <- function(
+  server,
+  token = NULL,
+  private_key = NULL,
+  apiKey = NULL
+) {
   # keep trying to authenticate until we're successful; server returns
   # 500 "Token is unclaimed error" while waiting for interactive auth to complete
   cli::cli_progress_bar(format = "{cli::pb_spin} Waiting for authentication...")
@@ -190,12 +257,16 @@ waitForAuthedUser <- function(server,
   user
 }
 
-getAuthedUser <- function(server,
-                          token = NULL,
-                          private_key = NULL,
-                          apiKey = NULL) {
+getAuthedUser <- function(
+  server,
+  token = NULL,
+  private_key = NULL,
+  apiKey = NULL
+) {
   if (!xor(is.null(token) && is.null(private_key), is.null(apiKey))) {
-    cli::cli_abort("Must supply either {.arg token} + {private_key} or {.arg apiKey}")
+    cli::cli_abort(
+      "Must supply either {.arg token} + {private_key} or {.arg apiKey}"
+    )
   }
 
   account <- list(
@@ -249,11 +320,13 @@ setAccountInfo <- function(name, token, secret, server = "shinyapps.io") {
 
 # A user can have multiple accounts, so iterate over all accounts looking
 # for one with the specified name
-findShinyAppsAccountId <- function(name,
-                                   token,
-                                   secret,
-                                   server,
-                                   error_call = caller_env()) {
+findShinyAppsAccountId <- function(
+  name,
+  token,
+  secret,
+  server,
+  error_call = caller_env()
+) {
   if (secret == "<SECRET>") {
     cli::cli_abort(
       c(
@@ -276,7 +349,9 @@ findShinyAppsAccountId <- function(name,
       return(account$id)
     }
   }
-  cli::cli_abort("Unable to determine {.arg accountId} for account {.str {name}}")
+  cli::cli_abort(
+    "Unable to determine {.arg accountId} for account {.str {name}}"
+  )
 }
 
 #' @rdname accounts
@@ -288,7 +363,11 @@ accountInfo <- function(name = NULL, server = NULL) {
 
 # Discovers then loads details about an account from disk.
 # Internal equivalent to accountInfo that lets callers provide error context.
-findAccountInfo <- function(name = NULL, server = NULL, error_call = caller_env()) {
+findAccountInfo <- function(
+  name = NULL,
+  server = NULL,
+  error_call = caller_env()
+) {
   fullAccount <- findAccount(name, server, error_call = error_call)
   configFile <- accountConfigFile(fullAccount$name, fullAccount$server)
 
@@ -309,6 +388,7 @@ findAccountInfo <- function(name = NULL, server = NULL, error_call = caller_env(
   info$private_key <- secret(info$private_key)
   info$secret <- secret(info$secret)
   info$apiKey <- secret(info$apiKey)
+  info$snowflakeToken <- secret(info$snowflakeToken)
 
   info
 }
@@ -328,14 +408,16 @@ removeAccount <- function(name = NULL, server = NULL) {
   invisible(NULL)
 }
 
-registerAccount <- function(serverName,
-                            accountName,
-                            accountId,
-                            token = NULL,
-                            secret = NULL,
-                            private_key = NULL,
-                            apiKey = NULL) {
-
+registerAccount <- function(
+  serverName,
+  accountName,
+  accountId,
+  token = NULL,
+  secret = NULL,
+  private_key = NULL,
+  apiKey = NULL,
+  snowflakeConnectionName = NULL
+) {
   check_string(serverName)
   check_string(accountName)
   if (!is.null(secret)) {
@@ -349,7 +431,8 @@ registerAccount <- function(serverName,
     token = token,
     secret = secret,
     private_key = private_key,
-    apiKey = apiKey
+    apiKey = apiKey,
+    snowflakeConnectionName = snowflakeConnectionName
   )
 
   path <- accountConfigFile(accountName, serverName)
@@ -357,8 +440,9 @@ registerAccount <- function(serverName,
   write.dcf(compact(fields), path, width = 100)
 
   # set restrictive permissions on it if possible
-  if (identical(.Platform$OS.type, "unix"))
+  if (identical(.Platform$OS.type, "unix")) {
     Sys.chmod(path, mode = "0600")
+  }
 
   path
 }

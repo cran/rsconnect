@@ -72,6 +72,11 @@ isCloudServer <- function(server) {
   isPositCloudServer(server) || isShinyappsServer(server)
 }
 
+isSPCSServer <- function(server) {
+  info <- serverInfo(server)
+  grepl(pattern = "snowflakecomputing.app", x = info$url, fixed = TRUE)
+}
+
 checkCloudServer <- function(server, call = caller_env()) {
   if (!isCloudServer(server)) {
     cli::cli_abort("`server` must be shinyapps.io or posit.cloud", call = call)
@@ -102,10 +107,7 @@ cloudServerInfo <- function(name, url) {
   )
 }
 
-findServer <- function(server = NULL,
-                       local = TRUE,
-                       error_call = caller_env()) {
-
+findServer <- function(server = NULL, local = TRUE, error_call = caller_env()) {
   if (!is.null(server)) {
     check_string(server, call = error_call)
 
@@ -154,6 +156,8 @@ findServer <- function(server = NULL,
 #'   character vector containing the certificate's contents.
 #' @param validate Validate that `url` actually points to a Posit Connect
 #'   server?
+#' @param snowflakeConnectionName Name for the Snowflake connection parameters
+#'   stored in `connections.toml`.
 #' @param quiet Suppress output and prompts where possible.
 #' @export
 #' @examples
@@ -168,12 +172,19 @@ findServer <- function(server = NULL,
 #' connectUser(server = "myserver")
 #' }
 #' @export
-addServer <- function(url, name = NULL, certificate = NULL, validate = TRUE, quiet = FALSE) {
+addServer <- function(
+  url,
+  name = NULL,
+  certificate = NULL,
+  validate = TRUE,
+  snowflakeConnectionName = NULL,
+  quiet = FALSE
+) {
   check_string(url)
   check_name(name, allow_null = TRUE)
 
   if (validate) {
-    out <- validateConnectUrl(url, certificate)
+    out <- validateConnectUrl(url, certificate, snowflakeConnectionName)
     if (!out$valid) {
       cli::cli_abort("{.arg url} does not appear to be a Posit Connect server.")
     }
@@ -184,7 +195,7 @@ addServer <- function(url, name = NULL, certificate = NULL, validate = TRUE, qui
   registerServer(name, url, certificate)
 
   if (!quiet) {
-    message("Server '", name,  "' added successfully: ", url)
+    message("Server '", name, "' added successfully: ", url)
   }
 }
 
@@ -192,7 +203,11 @@ addServer <- function(url, name = NULL, certificate = NULL, validate = TRUE, qui
 # Validate a connect server URL by hitting a known configuration endpoint
 # The URL may be specified with or without the protocol and port; this function
 # will try both http and https and follow any redirects given by the server.
-validateConnectUrl <- function(url, certificate = NULL) {
+validateConnectUrl <- function(
+  url,
+  certificate = NULL,
+  snowflakeConnectionName = NULL
+) {
   # Add protocol if missing, assuming https except for local installs
   if (!grepl("://", url, fixed = TRUE)) {
     if (grepl(":3939", url, fixed = TRUE)) {
@@ -207,16 +222,24 @@ validateConnectUrl <- function(url, certificate = NULL) {
   GET_server_settings <- function(url) {
     timeout <- getOption("rsconnect.http.timeout", if (isWindows()) 20 else 10)
     auth_info <- list(certificate = inferCertificateContents(certificate))
+
+    if (!is.null(snowflakeConnectionName)) {
+      auth_info$snowflakeToken <- getSnowflakeAuthToken(
+        url,
+        snowflakeConnectionName
+      )
+    }
     GET(
       parseHttpUrl(url),
       auth_info,
       "/server_settings",
-      timeout = timeout
+      timeout = timeout,
+      rawResponse = TRUE
     )
   }
-
   response <- NULL
   cnd <- catch_cnd(response <- GET_server_settings(url), "error")
+
   if (is_http && cnd_inherits(cnd, "OPERATION_TIMEDOUT")) {
     url <- gsub("^http://", "https://", url)
     cnd <- catch_cnd(response <- GET_server_settings(url), "error")
@@ -241,13 +264,19 @@ ensureConnectServerUrl <- function(url) {
   url <- gsub("/$", "", url)
 
   # ensure 'url' ends with '/__api__'
-  if (!grepl("/__api__$", url))
+  if (!grepl("/__api__$", url)) {
     url <- paste(url, "/__api__", sep = "")
+  }
 
   url
 }
 
-registerServer <- function(name, url, certificate = NULL, error_call = caller_env()) {
+registerServer <- function(
+  name,
+  url,
+  certificate = NULL,
+  error_call = caller_env()
+) {
   certificate <- inferCertificateContents(certificate)
 
   if (!identical(substr(url, 1, 5), "https") && !is.null(certificate)) {
@@ -284,8 +313,9 @@ addServerCertificate <- function(name, certificate, quiet = FALSE) {
   info <- serverInfo(name)
   registerServer(name, info$url, certificate)
 
-  if (!quiet)
+  if (!quiet) {
     message("Certificate added to server '", name, "'")
+  }
 
   invisible(NULL)
 }

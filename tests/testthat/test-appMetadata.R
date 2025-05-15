@@ -8,7 +8,11 @@ test_that("quarto affects mode inference", {
   metadata <- appMetadata(dir, c("foo.Rmd"))
   expect_equal(metadata$appMode, "rmd-static")
 
-  metadata <- appMetadata(dir, c("foo.Rmd"), metadata = list(quarto_version = 1))
+  metadata <- appMetadata(
+    dir,
+    c("foo.Rmd"),
+    metadata = list(quarto_version = 1)
+  )
   expect_equal(metadata$appMode, "quarto-static")
 })
 
@@ -63,6 +67,39 @@ test_that("content type (appMode) is inferred and can be overridden", {
   expect_equal(metadata$appMode, "static")
 })
 
+test_that("Shiny Quarto without an appropriate engine is an error", {
+  skip_on_cran()
+
+  dir <- local_temp_app(list(
+    "index.qmd" = c("---", "server: shiny", "---")
+  ))
+  files <- list.files(dir)
+  expect_snapshot(appMetadata(dir, files), error = TRUE)
+})
+
+test_that("Shiny Quarto with the knitr engine is OK", {
+  skip_on_cran()
+
+  dir <- local_temp_app(list(
+    "index.qmd" = c("---", "server: shiny", "engine: knitr", "---")
+  ))
+  files <- list.files(dir)
+  metadata <- appMetadata(dir, files)
+  expect_contains(metadata$quartoInfo$engines, "knitr")
+})
+
+test_that("Shiny Quarto with the jupyter engine is OK", {
+  skip_on_cran()
+
+  dir <- local_temp_app(list(
+    "index.qmd" = c("---", "server: shiny", "engine: jupyter", "---")
+  ))
+  files <- list.files(dir)
+  metadata <- appMetadata(dir, files)
+  expect_contains(metadata$quartoInfo$engines, "jupyter")
+})
+
+
 # checkLayout -------------------------------------------------------------
 
 # inferAppMode ------------------------------------------------------------
@@ -75,6 +112,12 @@ test_that("can infer mode for API with plumber.R", {
 
 test_that("can infer mode for API with entrypoint.R", {
   dir <- local_temp_app(list("entrypoint.R" = ""))
+  paths <- list.files(dir)
+  expect_equal(inferAppMode(dir, paths), "api")
+})
+
+test_that("can infer mode for API with _server.yml", {
+  dir <- local_temp_app(list("_server.yml" = ""))
   paths <- list.files(dir)
   expect_equal(inferAppMode(dir, paths), "api")
 })
@@ -150,19 +193,30 @@ test_that("can infer mode for shiny rmd docs", {
   expect_equal(inferAppMode(dir, paths), "rmd-shiny")
 
   # can pair server.R with shiny runtime
-  dir <- local_temp_app(list("index.Rmd" = yaml_runtime("shiny"), "server.R" = ""))
+  dir <- local_temp_app(list(
+    "index.Rmd" = yaml_runtime("shiny"),
+    "server.R" = ""
+  ))
   paths <- list.files(dir)
   expect_equal(inferAppMode(dir, paths), "rmd-shiny")
 
   # Beats static rmarkdowns
-  dir <- local_temp_app(list("index.Rmd" = yaml_runtime("shiny"), "foo.Rmd" = ""))
+  dir <- local_temp_app(list(
+    "index.Rmd" = yaml_runtime("shiny"),
+    "foo.Rmd" = ""
+  ))
   paths <- list.files(dir)
   expect_equal(inferAppMode(dir, paths), "rmd-shiny")
 })
 
 test_that("can infer mode for shiny qmd docs", {
   yaml_runtime <- function(runtime) {
-    c("---", paste0("runtime: ", runtime), "---")
+    c(
+      "---",
+      paste0("runtime: ", runtime),
+      paste0("engine: knitr"),
+      "---"
+    )
   }
 
   dir <- local_temp_app(list("index.Qmd" = yaml_runtime("shiny")))
@@ -227,11 +281,26 @@ test_that("otherwise fails back to first file with matching extensions", {
 })
 
 test_that("can use R, Rmd, and qmd files for Quarto modes", {
-  expect_equal(inferAppPrimaryDoc(NULL, c(".Rprofile", "foo.R"), "quarto-static"), "foo.R")
-  expect_equal(inferAppPrimaryDoc(NULL, c(".Rprofile", "foo.Rmd"), "quarto-static"), "foo.Rmd")
-  expect_equal(inferAppPrimaryDoc(NULL, c(".Rprofile", "foo.qmd"), "quarto-static"), "foo.qmd")
-  expect_equal(inferAppPrimaryDoc(NULL, c(".Rprofile", "foo.Rmd"), "quarto-shiny"), "foo.Rmd")
-  expect_equal(inferAppPrimaryDoc(NULL, c(".Rprofile", "foo.qmd"), "quarto-shiny"), "foo.qmd")
+  expect_equal(
+    inferAppPrimaryDoc(NULL, c(".Rprofile", "foo.R"), "quarto-static"),
+    "foo.R"
+  )
+  expect_equal(
+    inferAppPrimaryDoc(NULL, c(".Rprofile", "foo.Rmd"), "quarto-static"),
+    "foo.Rmd"
+  )
+  expect_equal(
+    inferAppPrimaryDoc(NULL, c(".Rprofile", "foo.qmd"), "quarto-static"),
+    "foo.qmd"
+  )
+  expect_equal(
+    inferAppPrimaryDoc(NULL, c(".Rprofile", "foo.Rmd"), "quarto-shiny"),
+    "foo.Rmd"
+  )
+  expect_equal(
+    inferAppPrimaryDoc(NULL, c(".Rprofile", "foo.qmd"), "quarto-shiny"),
+    "foo.qmd"
+  )
 })
 
 test_that("errors if no files with needed extension", {

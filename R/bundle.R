@@ -28,9 +28,11 @@ bundleAppDir <- function(
       # will be discovered and run by shiny::runApp(getwd()).
       #
       # Note: We do not expect to see writeManifest(appPrimaryDoc="notapp.R").
-      if (is.character(appPrimaryDoc) &&
-            tolower(tools::file_ext(appPrimaryDoc)) == "r" &&
-            file == appPrimaryDoc) {
+      if (
+        is.character(appPrimaryDoc) &&
+          tolower(tools::file_ext(appPrimaryDoc)) == "r" &&
+          file == appPrimaryDoc
+      ) {
         to <- file.path(bundleDir, "app.R")
       }
     }
@@ -42,7 +44,6 @@ bundleAppDir <- function(
     if (basename(to) == ".Rprofile") {
       tweakRProfile(to)
     }
-
   }
   bundleDir
 }
@@ -53,21 +54,21 @@ tweakRProfile <- function(path) {
   packratLines <- grep('source("packrat/init.R")', lines, fixed = TRUE)
   if (length(packratLines) > 0) {
     lines[packratLines] <- paste0(
-       "# Packrat initialization disabled in published application\n",
-       '# source("packrat/init.R")'
-      )
+      "# Packrat initialization disabled in published application\n",
+      '# source("packrat/init.R")'
+    )
   }
 
   renvLines <- grep('source("renv/activate.R")', lines, fixed = TRUE)
   if (length(renvLines) > 0) {
     lines[renvLines] <- paste0(
-       "# renv initialization disabled in published application\n",
-       '# source("renv/activate.R")'
-      )
+      "# renv initialization disabled in published application\n",
+      '# source("renv/activate.R")'
+    )
   }
 
   if (length(renvLines) > 0 || length(packratLines) > 0) {
-    msg <-  sprintf(
+    msg <- sprintf(
       "# Modified by rsconnect package %s on %s",
       packageVersion("rsconnect"),
       Sys.time()
@@ -92,7 +93,12 @@ writeBundle <- function(bundleDir, bundlePath, verbose = FALSE) {
     detectLongNames(bundleDir)
   }
 
-  utils::tar(bundlePath, files = NULL, compression = "gzip", tar = tarImplementation)
+  utils::tar(
+    bundlePath,
+    files = NULL,
+    compression = "gzip",
+    tar = tarImplementation
+  )
 }
 
 
@@ -114,18 +120,64 @@ isWindows <- function() {
   Sys.info()[["sysname"]] == "Windows"
 }
 
-createAppManifest <- function(appDir,
-                              appMetadata,
-                              users = NULL,
-                              pythonConfig = NULL,
-                              retainPackratDirectory = TRUE,
-                              image = NULL,
-                              envManagement = NULL,
-                              envManagementR = NULL,
-                              envManagementPy = NULL,
-                              verbose = FALSE,
-                              quiet = FALSE) {
+versionFromDescription <- function(appDir) {
+  descriptionFilepath <- file.path(appDir, "DESCRIPTION")
+  if (!file.exists(descriptionFilepath)) {
+    return(NULL)
+  }
 
+  desc <- read.dcf(descriptionFilepath)
+  depends <- as.list(desc[1, ])$Depends
+  if (is.null(depends)) {
+    return(NULL)
+  }
+
+  regexExtract("R \\((.*?)\\)", depends)
+}
+
+versionFromLockfile <- function(appDir) {
+  tryCatch(
+    {
+      lockfile <- suppressWarnings(renv::lockfile_read(project = appDir))
+      v <- lockfile$R$Version
+      # only major specified “3” → ~=3.0 → >=3.0,<4.0
+      # major and minor specified “3.8” or “3.8.11” → ~=3.8.0 → >=3.8.0,<3.9.0
+      parts <- strsplit(v, "\\.")[[1]]
+      new_parts <- c(head(parts, 2), "0")
+      paste0("~=", paste(new_parts, collapse = "."))
+    },
+    error = function(e) {
+      return(NULL)
+    }
+  )
+}
+
+rVersionRequires <- function(appDir) {
+  # Look for requirement at DESCRIPTION file
+  requires <- versionFromDescription(appDir)
+
+  # If DESCRIPTION file does not have R requirement
+  # Look it up on renv lockfile
+  if (is.null(requires)) {
+    requires <- versionFromLockfile(appDir)
+  }
+
+  requires
+}
+
+createAppManifest <- function(
+  appDir,
+  appMetadata,
+  users = NULL,
+  pythonConfig = NULL,
+  retainPackratDirectory = TRUE,
+  image = NULL,
+  envManagement = NULL,
+  envManagementR = NULL,
+  envManagementPy = NULL,
+  verbose = FALSE,
+  quiet = FALSE
+) {
   if (is.null(image)) {
     imageEnv <- Sys.getenv("RSCONNECT_IMAGE", unset = NA)
     if (!is.na(imageEnv) && nchar(imageEnv) > 0) {
@@ -142,8 +194,10 @@ createAppManifest <- function(appDir,
       verbose = verbose,
       quiet = quiet
     )
+    rVersionReq <- rVersionRequires(appDir)
   } else {
     packages <- list()
+    rVersionReq <- NULL
   }
 
   needsPython <- appMetadata$documentsHavePython ||
@@ -151,12 +205,14 @@ createAppManifest <- function(appDir,
     "reticulate" %in% names(packages)
   if (needsPython && !is.null(pythonConfig)) {
     python <- pythonConfig(appDir)
+    pyVersionReq <- python$requires
 
     packageFile <- file.path(appDir, python$package_manager$package_file)
     writeLines(python$package_manager$contents, packageFile)
     python$package_manager$contents <- NULL
   } else {
     python <- NULL
+    pyVersionReq <- NULL
   }
 
   if (!retainPackratDirectory) {
@@ -166,8 +222,12 @@ createAppManifest <- function(appDir,
   }
 
   # build the list of files to checksum
-  files <- list.files(appDir, recursive = TRUE, all.files = TRUE,
-                      full.names = FALSE)
+  files <- list.files(
+    appDir,
+    recursive = TRUE,
+    all.files = TRUE,
+    full.names = FALSE
+  )
 
   # provide checksums for all files
   filelist <- list()
@@ -198,15 +258,30 @@ createAppManifest <- function(appDir,
   metadata <- list(appmode = appMetadata$appMode)
 
   # emit appropriate primary document information
-  primaryDoc <- ifelse(is.null(appMetadata$appPrimaryDoc) ||
-                         tolower(tools::file_ext(appMetadata$appPrimaryDoc)) == "r",
-                       NA, appMetadata$appPrimaryDoc)
-  metadata$primary_rmd <- ifelse(appMetadata$appMode %in% c("rmd-shiny", "rmd-static", "quarto-shiny", "quarto-static"), primaryDoc, NA)
-  metadata$primary_html <- ifelse(appMetadata$appMode == "static", primaryDoc, NA)
+  primaryDoc <- ifelse(
+    is.null(appMetadata$appPrimaryDoc) ||
+      tolower(tools::file_ext(appMetadata$appPrimaryDoc)) == "r",
+    NA,
+    appMetadata$appPrimaryDoc
+  )
+  metadata$primary_rmd <- ifelse(
+    appMetadata$appMode %in%
+      c("rmd-shiny", "rmd-static", "quarto-shiny", "quarto-static"),
+    primaryDoc,
+    NA
+  )
+  metadata$primary_html <- ifelse(
+    appMetadata$appMode == "static",
+    primaryDoc,
+    NA
+  )
 
   # emit content category (plots, etc)
-  metadata$content_category <- ifelse(!is.null(appMetadata$contentCategory),
-                                      appMetadata$contentCategory, NA)
+  metadata$content_category <- ifelse(
+    !is.null(appMetadata$contentCategory),
+    appMetadata$contentCategory,
+    NA
+  )
   metadata$has_parameters <- appMetadata$hasParameters
 
   # add metadata
@@ -229,12 +304,27 @@ createAppManifest <- function(appDir,
   }
 
   # emit the environment field
-  if (!is.null(image) || length(envManagementInfo) > 0) {
+  if (
+    !is.null(image) ||
+      length(envManagementInfo) > 0 ||
+      !is.null(rVersionReq) ||
+      !is.null(pyVersionReq)
+  ) {
     manifest$environment <- list()
 
     # if there is a target image, attach it to the environment
     if (!is.null(image)) {
       manifest$environment$image <- image
+    }
+
+    # if there is an R version constraint
+    if (!is.null(rVersionReq)) {
+      manifest$environment$r <- list(requires = rVersionReq)
+    }
+
+    # if there is a Python version constraint
+    if (!is.null(pyVersionReq)) {
+      manifest$environment$python <- list(requires = pyVersionReq)
     }
 
     # if either environment_management.r or environment_management.python

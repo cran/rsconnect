@@ -1,12 +1,13 @@
-appMetadata <- function(appDir,
-                        appFiles,
-                        appPrimaryDoc = NULL,
-                        quarto = NA,
-                        appMode = NULL,
-                        contentCategory = NULL,
-                        isShinyappsServer = FALSE,
-                        metadata = list()) {
-
+appMetadata <- function(
+  appDir,
+  appFiles,
+  appPrimaryDoc = NULL,
+  quarto = NA,
+  appMode = NULL,
+  contentCategory = NULL,
+  isShinyappsServer = FALSE,
+  metadata = list()
+) {
   if (is_string(quarto)) {
     lifecycle::deprecate_warn(
       when = "1.0.0",
@@ -31,8 +32,10 @@ appMetadata <- function(appDir,
     # applications. They may have name.R, not app.R or server.R.
     #
     # This file is later renamed to app.R when deployed by bundleAppDir().
-    if (!is.null(appPrimaryDoc) &&
-          tolower(tools::file_ext(appPrimaryDoc)) == "r") {
+    if (
+      !is.null(appPrimaryDoc) &&
+        tolower(tools::file_ext(appPrimaryDoc)) == "r"
+    ) {
       appMode <- "shiny"
     } else {
       # Inference only uses top-level files
@@ -67,6 +70,14 @@ appMetadata <- function(appDir,
       appDir = appDir,
       appPrimaryDoc = appPrimaryDoc
     )
+    if (appMode == "quarto-shiny") {
+      if (!any(c("knitr", "jupyter") %in% quartoInfo[["engines"]])) {
+        cli::cli_abort(c(
+          "The Quarto document requires a server but does not use an executable engine.",
+          "Consider including some executable code, specifying an engine, or removing the server configuration."
+        ))
+      }
+    }
   } else {
     quartoInfo <- NULL
   }
@@ -88,8 +99,8 @@ inferAppMode <- function(
   appDir,
   appFiles,
   usesQuarto = NA,
-  isShinyappsServer = FALSE) {
-
+  isShinyappsServer = FALSE
+) {
   rootFiles <- appFiles[dirname(appFiles) == "."]
   absoluteRootFiles <- file.path(appDir, rootFiles)
   absoluteAppFiles <- file.path(appDir, appFiles)
@@ -102,6 +113,12 @@ inferAppMode <- function(
   # plumber API
   plumberFiles <- matchingNames(absoluteRootFiles, "^(plumber|entrypoint).r$")
   if (length(plumberFiles) > 0) {
+    return("api")
+  }
+
+  # general API
+  server_yml <- matchingNames(absoluteRootFiles, "^_server.yml$")
+  if (length(server_yml) > 0) {
     return("api")
   }
 
@@ -128,11 +145,9 @@ inferAppMode <- function(
     #
     # Do not rely on _quarto.yml alone, as RStudio includes that file even when
     # publishing HTML. https://github.com/rstudio/rstudio/issues/11444
-    usesQuarto <- (
-      hasQmd ||
+    usesQuarto <- (hasQmd ||
       (hasQuartoYml && hasRmd) ||
-      (hasQuartoYml && hasR)
-    )
+      (hasQuartoYml && hasR))
   }
 
   # Documents with "server: shiny" in their YAML front matter need shiny too
@@ -182,7 +197,10 @@ inferAppMode <- function(
   }
 
   # TensorFlow model files are lower in the hierarchy, not at the root.
-  modelFiles <- matchingNames(absoluteAppFiles, "^(saved_model.pb|saved_model.pbtxt)$")
+  modelFiles <- matchingNames(
+    absoluteAppFiles,
+    "^(saved_model.pb|saved_model.pbtxt)$"
+  )
   if (length(modelFiles) > 0) {
     return("tensorflow-saved-model")
   }
@@ -210,8 +228,10 @@ yamlFromRmd <- function(filename) {
         # ...and the first --- line is not preceded by non-whitespace...
         if (diff(delim[1:2]) > 1) {
           # ...and there is actually something between the two --- lines...
-          yamlData <- paste(lines[(delim[[1]] + 1):(delim[[2]] - 1)],
-                            collapse = "\n")
+          yamlData <- paste(
+            lines[(delim[[1]] + 1):(delim[[2]] - 1)],
+            collapse = "\n"
+          )
           return(yaml::yaml.load(yamlData))
         }
       }
@@ -248,11 +268,13 @@ inferAppPrimaryDoc <- function(appPrimaryDoc, appFiles, appMode) {
   }
 
   # determine expected primary document extension
-  ext <- switch(appMode,
-                "static"        = "\\.html?$",
-                "quarto-static" = "\\.(r|rmd|qmd)$",
-                "quarto-shiny"  = "\\.(rmd|qmd)$",
-                "\\.rmd$")
+  ext <- switch(
+    appMode,
+    "static" = "\\.html?$",
+    "quarto-static" = "\\.(r|rmd|qmd)$",
+    "quarto-shiny" = "\\.(rmd|qmd)$",
+    "\\.rmd$"
+  )
 
   # use index file if it exists
   matching <- grepl(paste0("^index", ext), appFiles, ignore.case = TRUE)
@@ -277,23 +299,30 @@ inferAppPrimaryDoc <- function(appPrimaryDoc, appFiles, appMode) {
 }
 
 appIsDocument <- function(appMode) {
-  appMode %in% c(
-    "rmd-static",
-    "rmd-shiny",
-    "quarto-static",
-    "quarto-shiny"
-  )
+  appMode %in%
+    c(
+      "rmd-static",
+      "rmd-shiny",
+      "quarto-static",
+      "quarto-shiny"
+    )
 }
 
 appIsQuartoDocument <- function(appMode) {
-  appMode %in% c(
-    "quarto-static",
-    "quarto-shiny"
-  )
+  appMode %in%
+    c(
+      "quarto-static",
+      "quarto-shiny"
+    )
 }
 
 
-appHasParameters <- function(appDir, appPrimaryDoc, appMode, contentCategory = NULL) {
+appHasParameters <- function(
+  appDir,
+  appPrimaryDoc,
+  appMode,
+  contentCategory = NULL
+) {
   # Only Rmd deployments are marked as having parameters. Shiny applications
   # may distribute an Rmd alongside app.R, but that does not cause the
   # deployment to be considered parameterized.
@@ -326,7 +355,13 @@ detectPythonInDocuments <- function(appDir, files = NULL) {
     files <- bundleFiles(appDir)
   }
 
-  rmdFiles <- grep("^[^/\\\\]+\\.[rq]md$", files, ignore.case = TRUE, perl = TRUE, value = TRUE)
+  rmdFiles <- grep(
+    "^[^/\\\\]+\\.[rq]md$",
+    files,
+    ignore.case = TRUE,
+    perl = TRUE,
+    value = TRUE
+  )
   for (rmdFile in rmdFiles) {
     if (documentHasPythonChunk(file.path(appDir, rmdFile))) {
       return(TRUE)
