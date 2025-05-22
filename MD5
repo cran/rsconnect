@@ -1,8 +1,8 @@
-fe5e52ec4a0bafe36f03dc083f35a4ea *DESCRIPTION
+697d48a55c0d31ee18398f34ff63f672 *DESCRIPTION
 7aae950ec69b95588ce07a55c546a4ea *NAMESPACE
-f5167cf8d0c7ce5c542396f06ec76a11 *NEWS.md
+7e819918d5a966c0f70b48f2b253981e *NEWS.md
 39dee27776f11ade37c6780f80cea8b1 *R/account-find.R
-b77a9a56f6df93601dcd18d31498a70b *R/accounts.R
+01f320e4d183eb2de3fb0ab876cb5c6f *R/accounts.R
 bbb840b3567823eb4b1a5bf9bad46dc8 *R/appDependencies.R
 58e885692408de5362e41d3fdb743363 *R/appMetadata-quarto.R
 0c64ed70f2d1c547e8d51fe70028568b *R/appMetadata.R
@@ -54,7 +54,7 @@ bfa4fe0d03336d87e0f4af03993a144c *R/rpubs.R
 409a0f6ddf618355414c630aba1da996 *R/rsconnect-package.R
 4bdcdbee6c2bf9074632a6bf46bed7e5 *R/secret.R
 bbe5c357377c42fc62c147c408348525 *R/servers-deprec.R
-53001306beebf01642bb2dd2569425a3 *R/servers.R
+4e6a9f392ac4033a0aacfb859057fab4 *R/servers.R
 d41d8cd98f00b204e9800998ecf8427e *R/static-analysis.R
 864f2975ec134ad6bbfc7970567d7f96 *R/tasks.R
 93af94ed673b9f893ed5d051cca895c7 *R/terminateApp.R
