@@ -1,3 +1,7 @@
+# rsconnect 1.4.2
+
+* Address duplicate certificate errors on macOS with newer curl. (#1175)
+
 # rsconnect 1.4.1
 
 * Fixed processing error during server validation, which prevented
