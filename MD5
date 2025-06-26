@@ -1,6 +1,6 @@
-9bd909a31b2f0c37e3b940090c185e44 *DESCRIPTION
-7aae950ec69b95588ce07a55c546a4ea *NAMESPACE
-eb2bb50b7102743347127124e5e55ad9 *NEWS.md
+5c1425342c721f56c4b19b6288475eff *DESCRIPTION
+d8ce062d38e7143d3fbe8c5264b0d1bb *NAMESPACE
+9dd45abc276f3b04c0e6686b2b6277cc *NEWS.md
 39dee27776f11ade37c6780f80cea8b1 *R/account-find.R
 01f320e4d183eb2de3fb0ab876cb5c6f *R/accounts.R
 ed8a3c054a7d100aebd5f85c1760e856 *R/appDependencies.R
@@ -16,7 +16,7 @@ e5ad3a3eb1dd2cce9d5897da2e824959 *R/bundlePackageRenv.R
 2ec6c7b1c4e4df2f58dc85b3e6ead333 *R/bundlePython.R
 838c7d841a617ec2d961ee1fd8f6bb3b *R/certificates.R
 18eac425ca6b018c45e877b7d7b6ef92 *R/client-cloud.R
-624dbcab0d6abb0eb2033a0a3496775f *R/client-connect.R
+4543342e1a6090b7664bcf3a024e17aa *R/client-connect.R
 78a683cb2c7a238cc8ab43c5d47dca20 *R/client-shinyapps.R
 f3863336918e81e7faff8e7d97ff042c *R/client.R
 956ea6ccb705bc8d1e639c65b675d293 *R/config.R
@@ -38,12 +38,9 @@ d0e96e22ea057eb83e91517a240fba44 *R/http-libcurl.R
 977d3af7fb490cde13c5e82495fb55b1 *R/http-rcurl.R
 d98dd0da511bd59278da9558668af295 *R/http.R
 e08d8c76b52498211f324e13b83bbb82 *R/ide.R
-24d85f0cf495fd5b66540cea0fc3c087 *R/import-standalone-config.R
-0c73d1f222ad37e35aec086b750645d2 *R/import-standalone-credentials.R
 8c5f08458cfd4e7f75a27924b2789c83 *R/import-standalone-obj-type.R
 5b49b9c463766fac246aaf38deb93504 *R/import-standalone-types-check.R
 a7cbf9710ea30aa0feb533912d8f3c18 *R/imports.R
-57310144620d419caf5f3189b9854909 *R/keypair.R
 30b3ba170bdbd25a1a79c926288e3aca *R/lint-framework.R
 a8d4a9a1b6dc06d897bedfbc18e280d5 *R/lint.R
 3276020832692f1dda226dc3ae62d58d *R/linters.R
@@ -137,8 +134,6 @@ f6be60a5fda83866c33b022dd6fc43a0 *man/showInvited.Rd
 f7381c79897359cd9442783ed59dd626 *man/showProperties.Rd
 1dcdb65fb1758b688eb64e3f6b8edd3d *man/showUsage.Rd
 a7ddebb09e4527c54d141884f742e52a *man/showUsers.Rd
-92e6bd05c7bd232546160b8836b7708b *man/snowflake_connection.Rd
-d1c06ea2df88c7e13339b22b3ccc10c0 *man/snowflake_credentials.Rd
 f3d68c85eaac670b1f08cddc2336b062 *man/syncAppMetadata.Rd
 9f4004aa41bce250e4a77eca2414bcb1 *man/taskLog.Rd
 65885c2a8017acc87134bff96468aba3 *man/tasks.Rd
