@@ -33,8 +33,7 @@ deployApp(
   image = NULL,
   envManagement = NULL,
   envManagementR = NULL,
-  envManagementPy = NULL,
-  space = NULL
+  envManagementPy = NULL
 )
 }
 \arguments{
@@ -74,12 +73,18 @@ Connect only). The values of the environment variables are sent over an
 encrypted connection and are not stored in the bundle, making this a safe
 way to send private data to Connect.
 
+The values of sensitive environment variables should be set in the current
+session via an \code{.Renviron} file or with the help of a credential store like
+\href{https://keyring.r-lib.org/}{keyring}. Avoid using
+\code{\link[=Sys.setenv]{Sys.setenv()}} for sensitive values, as that results in the value appearing
+in your \code{.Rhistory}.
+
 The names (not values) are stored in the deployment record so that future
 deployments will automatically update their values. Other environment
 variables on the server will not be affected. This means that removing an
 environment variable from \code{envVars} will leave it unchanged on the server.
 To remove it, either delete it using the Connect UI, or temporarily unset
-it (with \code{Sys.unsetenv()} or similar) then re-deploy.
+it (with \code{\link[=Sys.unsetenv]{Sys.unsetenv()}} or similar) then re-deploy.
 
 Environment variables are set prior to deployment so that your code
 can use them and the first deployment can still succeed. Note that means
@@ -95,8 +100,9 @@ for re-deploying apps created by someone else.
 
 You can find the \code{appId} in the following places:
 \itemize{
-\item On shinyapps.io, it's the \code{id} listed on the applications page.
 \item For Posit Connect, it's \code{guid} from the info tab on the content page.
+\item For Posit Connect Cloud, it can be found in the content admin page's URL \verb{https://connect.posit.cloud/\{accountName\}/content/\{appId\}}).
+\item On shinyapps.io, it's the \code{id} listed on the applications page.
 }}
 
 \item{appMode}{Optional; the type of content being deployed.
@@ -119,7 +125,7 @@ Use \code{\link[=accounts]{accounts()}} to see the full list of available option
 \item{upload}{If \code{TRUE} (the default) then the application is uploaded from
 the local system prior to deployment. If \code{FALSE} then it is re-deployed
 using the last version that was uploaded. \code{FALSE} is only supported on
-shinyapps.io; \code{TRUE} is required on Posit Connect.}
+Posit Connect Cloud and shinyapps.io; \code{TRUE} is required on Posit Connect.}
 
 \item{recordDir}{Directory where deployment record is written. The default,
 \code{NULL}, uses \code{appDir}, since this is usually where you want the deployment
@@ -211,16 +217,13 @@ the application default Python environment management strategy, or the
 server default if no application default is defined.
 
 (This option is ignored when \code{envManagement} is non-\code{NULL}.)}
-
-\item{space}{Optional. For Posit Cloud, the id of the space where the content
-should be deployed. If none is provided, content will be deployed to the
-deploying user's workspace or deployed to the same space in case of
-redeploy.}
 }
 \description{
 Deploy a \link[shiny:shiny-package]{shiny} application, an
 \link[rmarkdown:rmarkdown-package]{RMarkdown} document, a plumber API, or HTML
 content to a server.
+
+Supported servers: All servers
 }
 \details{
 \subsection{Deployment records}{

@@ -1,9 +1,13 @@
 #' Deploy an Application
 #'
+#' @description
 #' Deploy a [shiny][shiny::shiny-package] application, an
 #' [RMarkdown][rmarkdown::rmarkdown-package] document, a plumber API, or HTML
 #' content to a server.
 #'
+#' Supported servers: All servers
+#'
+#' @details
 #' ## Deployment records
 #'
 #' When deploying an app, `deployApp()` will save a deployment record that
@@ -54,12 +58,18 @@
 #'   encrypted connection and are not stored in the bundle, making this a safe
 #'   way to send private data to Connect.
 #'
+#'   The values of sensitive environment variables should be set in the current
+#'   session via an `.Renviron` file or with the help of a credential store like
+#'   [keyring](https://keyring.r-lib.org/). Avoid using
+#'   [Sys.setenv()] for sensitive values, as that results in the value appearing
+#'   in your `.Rhistory`.
+#'
 #'   The names (not values) are stored in the deployment record so that future
 #'   deployments will automatically update their values. Other environment
 #'   variables on the server will not be affected. This means that removing an
 #'   environment variable from `envVars` will leave it unchanged on the server.
 #'   To remove it, either delete it using the Connect UI, or temporarily unset
-#'   it (with `Sys.unsetenv()` or similar) then re-deploy.
+#'   it (with [Sys.unsetenv()] or similar) then re-deploy.
 #'
 #'   Environment variables are set prior to deployment so that your code
 #'   can use them and the first deployment can still succeed. Note that means
@@ -73,8 +83,9 @@
 #'   for re-deploying apps created by someone else.
 #'
 #'   You can find the `appId` in the following places:
-#'   * On shinyapps.io, it's the `id` listed on the applications page.
 #'   * For Posit Connect, it's `guid` from the info tab on the content page.
+#'   * For Posit Connect Cloud, it can be found in the content admin page's URL `https://connect.posit.cloud/{accountName}/content/{appId}`).
+#'   * On shinyapps.io, it's the `id` listed on the applications page.
 #' @param appMode Optional; the type of content being deployed.
 #'   Provide this option when the inferred type of content is incorrect. This
 #'   can happen, for example, when static HTML content includes a downloadable
@@ -92,7 +103,7 @@
 #' @param upload If `TRUE` (the default) then the application is uploaded from
 #'   the local system prior to deployment. If `FALSE` then it is re-deployed
 #'   using the last version that was uploaded. `FALSE` is only supported on
-#'   shinyapps.io; `TRUE` is required on Posit Connect.
+#'   Posit Connect Cloud and shinyapps.io; `TRUE` is required on Posit Connect.
 #' @param recordDir Directory where deployment record is written. The default,
 #'   `NULL`, uses `appDir`, since this is usually where you want the deployment
 #'   data to be stored. This argument is typically only needed when deploying
@@ -169,10 +180,6 @@
 #'   server default if no application default is defined.
 #'
 #'   (This option is ignored when `envManagement` is non-`NULL`.)
-#' @param space Optional. For Posit Cloud, the id of the space where the content
-#'   should be deployed. If none is provided, content will be deployed to the
-#'   deploying user's workspace or deployed to the same space in case of
-#'   redeploy.
 #' @examples
 #' \dontrun{
 #'
@@ -235,8 +242,7 @@ deployApp <- function(
   image = NULL,
   envManagement = NULL,
   envManagementR = NULL,
-  envManagementPy = NULL,
-  space = NULL
+  envManagementPy = NULL
 ) {
   check_string(appDir)
   if (isStaticFile(appDir) && !dirExists(appDir)) {
@@ -268,6 +274,15 @@ deployApp <- function(
     if (!file.exists(file.path(appDir, appPrimaryDoc))) {
       cli::cli_abort("`appPrimaryDoc` not found inside `appDir`")
     }
+  }
+
+  check_character(envVars, allow_null = TRUE)
+  if (!is.null(envVars) && !is.null(names(envVars))) {
+    cli::cli_abort(c(
+      "{.arg envVars} must be a character vector containing only environment variable {.strong names}.",
+      "i" = "Set environment variables with `Sys.setenv() or an `.Renviron` file.",
+      "i" = "Use {.fn unname} to remove the names from the vector passed to {.arg envVars}."
+    ))
   }
 
   if (!is.null(appSourceDoc)) {
@@ -364,18 +379,28 @@ deployApp <- function(
 
   # Run checks prior to first saveDeployment() to avoid errors that will always
   # prevent a successful upload from generating a partial deployment
-  if (!isCloudServer(accountDetails$server) && identical(upload, FALSE)) {
+  if (
+    isConnectServer(accountDetails$server) &&
+      identical(upload, FALSE)
+  ) {
     # it is not possible to deploy to Connect without uploading
     stop(
       "Posit Connect does not support deploying without uploading. ",
       "Specify upload=TRUE to upload and re-deploy your application."
     )
   }
-  if (!isConnectServer(accountDetails$server) && length(envVars) > 1) {
-    cli::cli_abort("{.arg envVars} only supported for Posit Connect servers")
-  }
 
   client <- clientForAccount(accountDetails)
+
+  if (
+    !serverSupportsEnvVars(accountDetails$server, client) &&
+      length(envVars) > 0
+  ) {
+    cli::cli_abort(
+      "{accountDetails$server} does not support setting {.arg envVars}"
+    )
+  }
+
   if (verbose) {
     showCookies(serverInfo(accountDetails$server)$url)
   }
@@ -395,53 +420,85 @@ deployApp <- function(
   )
 
   if (is.null(deployment$appId)) {
-    taskStart(quiet, "Creating application on server...")
-    application <- client$createApplication(
-      deployment$name,
-      deployment$title,
-      "shiny",
-      accountDetails$accountId,
-      appMetadata$appMode,
-      contentCategory,
-      space
-    )
-    taskComplete(quiet, "Created application with id {.val {application$id}}")
+    taskStart(quiet, "Creating content on server...")
+    if (isPositConnectCloudServer(accountDetails$server)) {
+      # Use appPrimaryDoc if available, otherwise fall back to inferredPrimaryFile
+      primaryFile <- appMetadata$appPrimaryDoc %||%
+        appMetadata$inferredPrimaryFile
+      application <- client$createContent(
+        deployment$name,
+        deployment$title,
+        accountDetails$accountId,
+        appMetadata$appMode,
+        primaryFile,
+        deployment$envVars
+      )
+    } else {
+      application <- client$createApplication(
+        deployment$name,
+        deployment$title,
+        "shiny",
+        accountDetails$accountId,
+        appMetadata$appMode,
+        contentCategory
+      )
+    }
+    taskComplete(quiet, "Created content with id {.val {application$id}}")
   } else {
-    taskStart(
-      quiet,
-      "Looking up application with id {.val {deployment$appId}}..."
-    )
-    application <- tryCatch(
-      {
-        application <- client$getApplication(
-          deployment$appId,
-          deployment$version
-        )
-        taskComplete(quiet, "Found application {.url {application$url}}")
-
-        if (identical(application$type, "static")) {
-          application$application_id <- client$createRevision(
-            application,
-            contentCategory
+    if (isPositConnectCloudServer(accountDetails$server)) {
+      taskStart(
+        quiet,
+        "Looking up content with id {.val {deployment$appId}}..."
+      )
+      application <- tryCatch(
+        {
+          application <- client$getContent(deployment$appId)
+          taskComplete(quiet, "Found content")
+          application
+        },
+        rsconnect_http_404 = function(err) {
+          application <- applicationDeleted(
+            client,
+            deployment,
+            recordPath,
+            appMetadata
           )
+          taskComplete(
+            quiet,
+            "Created content with id {.val {application$id}}"
+          )
+          application
         }
-
-        application
-      },
-      rsconnect_http_404 = function(err) {
-        application <- applicationDeleted(
-          client,
-          deployment,
-          recordPath,
-          appMetadata
-        )
-        taskComplete(
-          quiet,
-          "Created application with id {.val {application$id}}"
-        )
-        application
-      }
-    )
+      )
+    } else {
+      taskStart(
+        quiet,
+        "Looking up content with id {.val {deployment$appId}}..."
+      )
+      application <- tryCatch(
+        {
+          application <- client$getApplication(
+            deployment$appId,
+            deployment$version
+          )
+          taskComplete(quiet, "Found content {.url {application$url}}")
+          application
+        },
+        rsconnect_http_404 = function(err) {
+          application <- applicationDeleted(
+            client,
+            deployment,
+            recordPath,
+            appMetadata
+          )
+          taskComplete(
+            quiet,
+            "Created content with id {.val {application$id}}"
+          )
+          application
+        }
+      )
+    }
   }
   saveDeployment(
     recordPath,
@@ -451,21 +508,40 @@ deployApp <- function(
   )
 
   # Change _visibility_ & set env vars before uploading contents
-  if (
-    needsVisibilityChange(accountDetails$server, application, appVisibility)
-  ) {
-    taskStart(quiet, "Setting visibility to {appVisibility}...")
-    client$setApplicationProperty(
-      application$id,
-      "application.visibility",
-      appVisibility
-    )
-    taskComplete(quiet, "Visibility updated")
-  }
-  if (length(deployment$envVars) > 0) {
-    taskStart(quiet, "Updating environment variables {envVars}...")
-    client$setEnvVars(application$guid, deployment$envVars)
-    taskComplete(quiet, "Environment variables updated")
+  if (isPositConnectCloudServer(accountDetails$server)) {
+    # no update needed if we just created the content
+    # current revision will be null only when creating new content
+    if (!is.null(application$current_revision)) {
+      taskStart(quiet, "Updating content...")
+      # Use appPrimaryDoc if available, otherwise fall back to inferredPrimaryFile
+      primaryFile <- appMetadata$appPrimaryDoc %||%
+        appMetadata$inferredPrimaryFile
+      application <- client$updateContent(
+        application$id,
+        deployment$envVars,
+        newBundle = upload,
+        primaryFile,
+        appMetadata$appMode
+      )
+      taskComplete(quiet, "Content updated")
+    }
+  } else {
+    if (
+      needsVisibilityChange(accountDetails$server, application, appVisibility)
+    ) {
+      taskStart(quiet, "Setting visibility to {appVisibility}...")
+      client$setApplicationProperty(
+        application$id,
+        "application.visibility",
+        appVisibility
+      )
+      taskComplete(quiet, "Visibility updated")
+    }
+    if (length(deployment$envVars) > 0) {
+      taskStart(quiet, "Updating environment variables {envVars}...")
+      client$setEnvVars(application$guid, deployment$envVars)
+      taskComplete(quiet, "Environment variables updated")
+    }
   }
 
   if (upload) {
@@ -487,12 +563,19 @@ deployApp <- function(
       envManagementPy = envManagementPy
     )
     size <- format(file_size(bundlePath), big.mark = ",")
-    taskComplete(quiet, "Created {size}b bundle")
+    taskComplete(quiet, "Created bundle of size: {size}b")
 
     # create, and upload the bundle
     taskStart(quiet, "Uploading bundle...")
-    if (isCloudServer(accountDetails$server)) {
-      bundle <- uploadCloudBundle(
+    if (isPositConnectCloudServer(accountDetails$server)) {
+      uploadUrl <- application$next_revision$source_bundle_upload_url
+      success <- client$uploadBundle(bundlePath, uploadUrl)
+      if (!success) {
+        cli::cli_abort("Could not upload bundle.")
+      }
+      bundle <- NULL # PCC doesn't use bundle objects like other servers
+    } else if (isShinyappsServer(accountDetails$server)) {
+      bundle <- uploadShinyappsBundle(
         client,
         application$application_id,
         bundlePath
@@ -500,7 +583,11 @@ deployApp <- function(
     } else {
       bundle <- client$uploadApplication(application$id, bundlePath)
     }
-    taskComplete(quiet, "Uploaded bundle with id {.val {bundle$id}}")
+    if (isPositConnectCloudServer(accountDetails$server)) {
+      taskComplete(quiet, "Uploaded bundle")
+    } else {
+      taskComplete(quiet, "Uploaded bundle with id {.val {bundle$id}}")
+    }
 
     saveDeployment(
       recordPath,
@@ -510,17 +597,36 @@ deployApp <- function(
       metadata = metadata
     )
   } else {
-    # redeploy current bundle
-    bundle <- application$deployment$bundle
+    # redeploy existing bundle
+    if (isShinyappsServer(accountDetails$server)) {
+      bundle <- application$deployment$bundle
+    }
   }
 
   if (!quiet) {
     cli::cli_rule("Deploying to server")
   }
-  task <- client$deployApplication(application, bundle$id, space)
-  taskId <- if (is.null(task$task_id)) task$id else task$task_id
-  # wait for the deployment to complete (will raise an error if it can't)
-  response <- client$waitForTask(taskId, quiet)
+  if (isPositConnectCloudServer(accountDetails$server)) {
+    client$publish(application$id)
+    revisionId <- application$next_revision$id
+    response <- client$awaitCompletion(revisionId)
+    deploymentSucceeded <- response$success
+    application$url <- response$url
+
+    # save the deployment record one more time now that we have a URL
+    saveDeployment(
+      recordPath,
+      deployment = deployment,
+      application = application,
+      bundleId = bundle$id,
+      metadata = metadata
+    )
+  } else {
+    task <- client$deployApplication(application, bundle$id)
+    taskId <- if (is.null(task$task_id)) task$id else task$task_id
+    # wait for the deployment to complete (will raise an error if it can't)
+    response <- client$waitForTask(taskId, quiet)
+  }
   if (!quiet) {
     cli::cli_rule("Deployment complete")
   }
@@ -529,7 +635,9 @@ deployApp <- function(
   # before emitting the final status, to ensure it's the last line the user sees
   Sys.sleep(0.10)
 
-  deploymentSucceeded <- is.null(response$code) || response$code == 0
+  if (!isPositConnectCloudServer(accountDetails$server)) {
+    deploymentSucceeded <- is.null(response$code) || response$code == 0
+  }
   if (!quiet) {
     if (deploymentSucceeded) {
       cli::cli_alert_success(
@@ -544,6 +652,7 @@ deployApp <- function(
     openURL(
       client,
       application,
+      accountDetails$server,
       launch.browser,
       on.failure,
       deploymentSucceeded
@@ -558,6 +667,15 @@ deployApp <- function(
   logger("Deployment log finished")
 
   invisible(deploymentSucceeded)
+}
+
+serverSupportsEnvVars <- function(server, client) {
+  return(
+    # Connect Cloud supports setting environment variables, but not through a
+    # setEnvVars client method
+    isPositConnectCloudServer(server) ||
+      (isConnectServer(server) && "setEnvVars" %in% names(client))
+  )
 }
 
 taskStart <- function(quiet, message, .envir = caller_env()) {
@@ -593,12 +711,8 @@ needsVisibilityChange <- function(server, application, appVisibility = NULL) {
     # Defaults to private visibility
     return(FALSE)
   }
-
-  if (!isShinyappsServer(server)) {
-    cli::cli_abort(c(
-      "Can't change cloud app visiblity from {.fun deployApp}.",
-      i = "Please change on posit.cloud instead."
-    ))
+  if (isPositConnectCloudServer(server)) {
+    return(FALSE)
   }
 
   cur <- application$deployment$properties$application.visibility
@@ -621,15 +735,15 @@ runDeploymentHook <- function(appDir, option, verbose = FALSE) {
 }
 
 applicationDeleted <- function(client, deployment, recordPath, appMetadata) {
-  header <- "Failed to find existing application on server; it's probably been deleted."
+  header <- "Failed to find existing content on server; it's probably been deleted."
   not_interactive <- c(
     i = "Use {.fn forgetDeployment} to remove outdated record and try again.",
-    i = "Or use {.fn applications} to see other applications you have on the server."
+    i = "Or use {.fn applications} to see other content deployed to the the server."
   )
   prompt <- "What do you want to do?"
   choices <- c(
     "Give up and try again later",
-    "Delete existing deployment & create a new app"
+    "Delete existing deployment record & deploy this content as a new item"
   )
 
   cli_menu(header, prompt, choices, not_interactive = not_interactive, quit = 1)
@@ -644,13 +758,27 @@ applicationDeleted <- function(client, deployment, recordPath, appMetadata) {
   unlink(path)
 
   accountDetails <- accountInfo(deployment$account, deployment$server)
-  client$createApplication(
-    deployment$name,
-    deployment$title,
-    "shiny",
-    accountDetails$accountId,
-    appMetadata$appMode
-  )
+  if (isPositConnectCloudServer(accountDetails$server)) {
+    # Use appPrimaryDoc if available, otherwise fall back to inferredPrimaryFile
+    primaryFile <- appMetadata$appPrimaryDoc %||%
+      appMetadata$inferredPrimaryFile
+    client$createContent(
+      deployment$name,
+      deployment$title,
+      accountDetails$accountId,
+      appMetadata$appMode,
+      primaryFile,
+      deployment$envVars
+    )
+  } else {
+    client$createApplication(
+      deployment$name,
+      deployment$title,
+      "shiny",
+      accountDetails$accountId,
+      appMetadata$appMode
+    )
+  }
 }
 
 # Does almost exactly the same work as writeManifest(), but called within
@@ -721,12 +849,16 @@ validURL <- function(url) {
 openURL <- function(
   client,
   application,
+  server,
   launch.browser,
   on.failure,
   deploymentSucceeded
 ) {
   # function to browse to a URL using user-supplied browser (config or final)
   showURL <- function(url) {
+    if (isPositConnectCloudServer(server)) {
+      url <- addUtmParameters(url)
+    }
     if (isTRUE(launch.browser)) {
       utils::browseURL(url)
     } else if (is.function(launch.browser)) {

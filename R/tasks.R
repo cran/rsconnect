@@ -1,5 +1,10 @@
 #' List Tasks
 #'
+#' @description
+#' List Tasks
+#'
+#' Supported servers: ShinyApps servers
+#'
 #' @inheritParams deployApp
 #' @return
 #' Returns a data frame with the following columns:
@@ -18,12 +23,12 @@
 #'
 #' }
 #' @seealso [taskLog()]
-#' @note This function works only with shinyapps.io and posit.cloud.
+#' @note This function works only with shinyapps.io.
 #' @export
 tasks <- function(account = NULL, server = NULL) {
   # resolve account and create connect client
   accountDetails <- accountInfo(account, server)
-  checkCloudServer(accountDetails$server)
+  checkShinyappsServer(accountDetails$server)
 
   client <- clientForAccount(accountDetails)
 
@@ -42,7 +47,11 @@ tasks <- function(account = NULL, server = NULL) {
 
 #' Show task log
 #'
+#' @description
 #' Writes the task log for the given task
+#'
+#' Supported servers: ShinyApps servers
+#'
 #' @param taskId Task Id
 #' @inheritParams deployApp
 #' @param output Where to write output. Valid values are `NULL` or `stderr`
@@ -57,11 +66,11 @@ tasks <- function(account = NULL, server = NULL) {
 #'
 #' }
 #' @seealso [tasks()]
-#' @note This function works only with shinyapps.io and posit.cloud.
+#' @note This function works only with shinyapps.io.
 #' @export
 taskLog <- function(taskId, account = NULL, server = NULL, output = NULL) {
   accountDetails <- accountInfo(account, server)
-  checkCloudServer(accountDetails$server)
+  checkShinyappsServer(accountDetails$server)
 
   client <- clientForAccount(accountDetails)
 

@@ -66,13 +66,6 @@ test_that("needsVisibilityChange() returns FALSE when no change needed", {
   ))
 })
 
-test_that("needsVisibilityChange() errors for cloud", {
-  expect_snapshot(
-    error = TRUE,
-    needsVisibilityChange("posit.cloud", appVisibility = "public")
-  )
-})
-
 test_that("deployHook executes function if set", {
   withr::local_options(rsconnect.pre.deploy = NULL)
   expect_equal(
@@ -107,4 +100,12 @@ test_that("applicationDeleted() errors or prompts as needed", {
   simulate_user_input(2)
   expect_snapshot(. <- applicationDeleted(client, target, app))
   expect_length(dir(app, recursive = TRUE), 0)
+})
+
+# envvars -----------------------------------------------------------------
+
+test_that("deployApp() errors if envVars is given a named vector", {
+  expect_snapshot(error = TRUE, {
+    deployApp(local_temp_app(), envVars = c("FLAG" = "true"))
+  })
 })

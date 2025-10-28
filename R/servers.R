@@ -1,8 +1,11 @@
 #' Server metadata
 #'
+#' @description
 #' `servers()` lists all known servers; `serverInfo()` gets metadata about
-#' a specific server. Cloud servers `shinyapps.io` and `posit.cloud` are always
-#' automatically registered and available.
+#' a specific server. Cloud server `shinyapps.io` is always automatically
+#' registered and available.
+#'
+#' Supported servers: All servers
 #'
 #' @param name Server name. If omitted, you'll be prompted to pick a server.
 #' @param local Return only local servers? (i.e. not automatically registered
@@ -16,7 +19,7 @@
 #' servers()
 #'
 #' # Get information about a server
-#' serverInfo("posit.cloud")
+#' serverInfo("shinyapps.io")
 servers <- function(local = FALSE) {
   servers <- serverNames(local)
 
@@ -33,10 +36,10 @@ servers <- function(local = FALSE) {
 serverInfo <- function(name = NULL) {
   name <- findServer(name, local = FALSE)
 
-  if (isPositCloudServer(name)) {
-    info <- cloudServerInfo(name, "https://api.posit.cloud/v1")
-  } else if (isShinyappsServer(name)) {
-    info <- cloudServerInfo(name, "https://api.shinyapps.io/v1")
+  if (isShinyappsServer(name)) {
+    info <- shinyappsServerInfo(name, "https://api.shinyapps.io/v1")
+  } else if (isPositConnectCloudServer(name)) {
+    info <- connectCloudServerInfo(name, "https://api.connect.posit.cloud/v1")
   } else {
     configFile <- serverConfigFile(name)
     serverDcf <- read.dcf(serverConfigFile(name), all = TRUE)
@@ -50,11 +53,7 @@ serverInfo <- function(name = NULL) {
 serverNames <- function(local = FALSE) {
   names <- gsub("\\.dcf$", "", basename(serverConfigFiles()))
   if (!local) {
-    names <- c(names, "shinyapps.io", "posit.cloud")
-
-    if (nrow(accounts(server = "rstudio.cloud")) > 0) {
-      names <- c(names, "rstudio.cloud")
-    }
+    names <- c(names, "shinyapps.io", "connect.posit.cloud")
   }
 
   names
@@ -64,23 +63,14 @@ isShinyappsServer <- function(server) {
   identical(server, "shinyapps.io")
 }
 
-isPositCloudServer <- function(server) {
-  server %in% c("posit.cloud", "rstudio.cloud")
+isPositConnectCloudServer <- function(server) {
+  identical(server, "connect.posit.cloud")
 }
 
-isCloudServer <- function(server) {
-  isPositCloudServer(server) || isShinyappsServer(server)
-}
 
 isSPCSServer <- function(server) {
   info <- serverInfo(server)
   grepl(pattern = "snowflakecomputing.app", x = info$url, fixed = TRUE)
-}
-
-checkCloudServer <- function(server, call = caller_env()) {
-  if (!isCloudServer(server)) {
-    cli::cli_abort("`server` must be shinyapps.io or posit.cloud", call = call)
-  }
 }
 
 checkShinyappsServer <- function(server, call = caller_env()) {
@@ -89,20 +79,73 @@ checkShinyappsServer <- function(server, call = caller_env()) {
   }
 }
 
+checkConnectServer <- function(server, call = caller_env()) {
+  if (!isConnectServer(server)) {
+    cli::cli_abort("`server` must be a Posit Connect server", call = call)
+  }
+}
+
 isRPubs <- function(server) {
   identical(server, "rpubs.com")
 }
 
 isConnectServer <- function(server) {
-  !isCloudServer(server) && !isRPubs(server)
+  !isShinyappsServer(server) &&
+    !isRPubs(server) &&
+    !isPositConnectCloudServer(server)
 }
 
-cloudServerInfo <- function(name, url) {
+shinyappsServerInfo <- function(name, url) {
   list(
     name = name,
     url = getOption("rsconnect.shinyapps_url", url),
     certificate = inferCertificateContents(
       system.file("cert/shinyapps.io.pem", package = "rsconnect")
+    )
+  )
+}
+
+# Determine which Posit Connect Cloud environment to use. Valid values are
+# development, staging, and production.
+connectCloudEnvironment <- function() {
+  getOption(
+    "rsconnect.connect_cloud_environment",
+    "production"
+  )
+}
+
+# Returns various base URLs based on the configured Connect Cloud environment.
+connectCloudUrls <- function() {
+  switch(
+    connectCloudEnvironment(),
+    production = list(
+      api = "https://api.connect.posit.cloud/v1",
+      ui = "https://connect.posit.cloud",
+      auth = "https://login.posit.cloud",
+      logs = "https://logs.connect.posit.cloud"
+    ),
+    staging = list(
+      api = "https://api.staging.connect.posit.cloud/v1",
+      ui = "https://staging.connect.posit.cloud",
+      auth = "https://login.staging.posit.cloud",
+      logs = "https://logs.staging.connect.posit.cloud"
+    ),
+    development = list(
+      api = "https://api.dev.connect.posit.cloud/v1",
+      ui = "https://dev.connect.posit.cloud",
+      auth = "https://login.staging.posit.cloud",
+      logs = "https://logs.dev.connect.posit.cloud"
+    ),
+  )
+}
+
+# Returns metadata about the Posit Connect Cloud API server.
+connectCloudServerInfo <- function(name, url) {
+  list(
+    name = name,
+    url = connectCloudUrls()$api,
+    certificate = inferCertificateContents(
+      system.file("cert/api.connect.posit.cloud.pem", package = "rsconnect")
     )
   )
 }
@@ -148,6 +191,8 @@ findServer <- function(server = NULL, local = TRUE, error_call = caller_env()) {
 #'   [connectUser()].
 #' * `removeServer()` removes a server from the registry.
 #' * `addServerCertificate()` adds a certificate to a server.
+#'
+#' Supported servers: Posit Connect servers
 #'
 #' @param url URL for the server. Can be a bare hostname like
 #'   `connect.mycompany.com` or a url like `http://posit.mycompany.com/connect`.
@@ -300,6 +345,7 @@ registerServer <- function(
 #' @rdname addServer
 #' @export
 removeServer <- function(name = NULL) {
+  checkConnectServer(name)
   name <- findServer(name)
 
   configFile <- serverConfigFile(name)
@@ -309,6 +355,7 @@ removeServer <- function(name = NULL) {
 #' @rdname addServer
 #' @export
 addServerCertificate <- function(name, certificate, quiet = FALSE) {
+  checkConnectServer(name)
   info <- serverInfo(name)
   registerServer(name, info$url, certificate)
 

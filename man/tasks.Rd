@@ -25,9 +25,11 @@ Returns a data frame with the following columns:
 }
 \description{
 List Tasks
+
+Supported servers: ShinyApps servers
 }
 \note{
-This function works only with shinyapps.io and posit.cloud.
+This function works only with shinyapps.io.
 }
 \examples{
 \dontrun{

@@ -1,6 +1,10 @@
 #' List Deployed Applications
 #'
+#' @description
 #' List all applications currently deployed for a given account.
+#'
+#' Supported servers: All servers
+#'
 #' @inheritParams deployApp
 #' @return
 #' Returns a data frame with the following columns:
@@ -38,6 +42,12 @@ applications <- function(account = NULL, server = NULL) {
   accountDetails <- accountInfo(account, server)
   serverDetails <- serverInfo(accountDetails$server)
   client <- clientForAccount(accountDetails)
+
+  if (isPositConnectCloudServer(accountDetails$server)) {
+    cli::cli_abort(
+      "The applications() function is not supported for Posit Connect Cloud accounts."
+    )
+  }
 
   isConnect <- isConnectServer(accountDetails$server)
 
@@ -240,9 +250,15 @@ streamApplicationLogs <- function(authInfo, applicationId, entries, skip) {
   )
 }
 
-#' Show Application Logs
+#' Application Logs
 #'
-#' Show the logs for a deployed ShinyApps application.
+#' @description
+#' These functions provide access to the logs for deployed ShinyApps applications:
+#'
+#' * `showLogs()` displays the logs.
+#' * `getLogs()` returns the logged lines.
+#'
+#' Supported servers: ShinyApps servers
 #'
 #' @param appPath The path to the directory or file that was deployed.
 #' @param appFile The path to the R source file that contains the application
@@ -258,8 +274,10 @@ streamApplicationLogs <- function(authInfo, applicationId, entries, skip) {
 #'   function does not return; instead, log entries are written to the console
 #'   as they are made, until R is interrupted. Defaults to `FALSE`.
 #'
-#' @note This function only uses the \code{libcurl} transport, and works only for
-#'   ShinyApps servers.
+#' @note These functions only use the \code{libcurl} transport, and only work
+#'   for applications deployed to ShinyApps.io.
+#'
+#' @return `getLogs()` returns a data frame containing the logged lines.
 #'
 #' @export
 showLogs <- function(
@@ -278,6 +296,9 @@ showLogs <- function(
     server = server,
     account = account
   )
+
+  checkShinyappsServer(deployment$server)
+
   accountDetails <- accountInfo(deployment$account, deployment$server)
   client <- clientForAccount(accountDetails)
   application <- getAppByName(client, accountDetails, deployment$name)
@@ -316,11 +337,55 @@ showLogs <- function(
   }
 }
 
+#' @rdname showLogs
+#' @export
+getLogs <- function(
+  appPath = getwd(),
+  appFile = NULL,
+  appName = NULL,
+  account = NULL,
+  server = NULL,
+  entries = 50
+) {
+  # determine the log target and target account info
+  deployment <- findDeployment(
+    appPath = appPath,
+    appName = appName,
+    server = server,
+    account = account
+  )
+  accountDetails <- accountInfo(deployment$account, deployment$server)
+  client <- clientForAccount(accountDetails)
+  application <- getAppByName(client, accountDetails, deployment$name)
+
+  payload <- client$getLogs(application$id, entries, format = "json")
+
+  # Convert to a dataframe before combining because the JSON payload has inconsistent field order
+  # containing nested single-element lists.
+  converted <- lapply(payload$results, as.data.frame)
+  df <- do.call(rbind, converted)
+
+  # shinyapps.io returns ns timestamps.
+  df$timestamp <- as.POSIXct(df$timestamp / (1000 * 1000))
+
+  # Return a subset of the included fields.
+  result <- df[c(
+    "timestamp",
+    "account_id",
+    "application_id",
+    "message"
+  )]
+  result
+}
+
 #' Update deployment records
 #'
+#' @description
 #' Update the deployment records for applications published to Posit Connect.
 #' This updates application title and URL, and deletes records for deployments
 #' where the application has been deleted on the server.
+#'
+#' Supported servers: Posit Connect servers
 #'
 #' @param appPath The path to the directory or file that was deployed.
 #' @export
@@ -331,8 +396,10 @@ syncAppMetadata <- function(appPath = ".") {
   for (i in seq_len(nrow(deploys))) {
     curDeploy <- deploys[i, ]
 
-    # don't sync if published to RPubs
+    # don't sync if published to RPubs or Connect Cloud
     if (isRPubs(curDeploy$server)) {
+      next
+    } else if (isPositConnectCloudServer(curDeploy$server)) {
       next
     }
 
