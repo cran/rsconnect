@@ -1,8 +1,8 @@
-ab5d9ebb27b05e884a7ecc5e50f90c36 *DESCRIPTION
+eb65f7b322f72f11f21b9a744c7d5d71 *DESCRIPTION
 1c1348f529ab6928b927a24a6567cff7 *NAMESPACE
-43a1877f36136232ffb737082ba8a02d *NEWS.md
+e0eb70fd32f7cbac048a40366c883fdc *NEWS.md
 ac3e076f45c82f9272784163dac38889 *R/account-find.R
-d86c238f80f3eda0ee963f3aad9d8aa6 *R/accounts.R
+a96f7489054e0926defc67406c3186f3 *R/accounts.R
 6a6a69f2ff982ee052d447e09061d1c7 *R/appDependencies.R
 58e885692408de5362e41d3fdb743363 *R/appMetadata-quarto.R
 f6dd0840a76a64672ad3192709ef1a6c *R/appMetadata.R
@@ -38,8 +38,8 @@ efa3ef2996873f8711ed847416fc1f75 *R/http-curl.R
 3c95fe9fa09c26248682ee38d684a7f6 *R/http-internal.R
 d0e96e22ea057eb83e91517a240fba44 *R/http-libcurl.R
 977d3af7fb490cde13c5e82495fb55b1 *R/http-rcurl.R
-9aaaa10dcc9493d53777ae1b9bf4a0d6 *R/http.R
-642d4b78c06b5c81a26009ec4d4b115b *R/ide.R
+024d90afd22fdaf496dc4f0928230258 *R/http.R
+2e82ed0cbde92312cbdf1bd572952870 *R/ide.R
 8c5f08458cfd4e7f75a27924b2789c83 *R/import-standalone-obj-type.R
 5b49b9c463766fac246aaf38deb93504 *R/import-standalone-types-check.R
 a7cbf9710ea30aa0feb533912d8f3c18 *R/imports.R
@@ -93,7 +93,7 @@ dd4a3cdf6f8a526697bbd9334d890fcf *man/authorizedUsers.Rd
 55a8e1f513349e413b44971b079f17ed *man/configureApp.Rd
 2838f9f8af1da0c29ac787b4782e79f6 *man/connectApiUser.Rd
 6c316d7c496d14b4018bd877e0c25c83 *man/connectCloudUser.Rd
-00bc0d074b041958fb754373cb0d3703 *man/connectSPCSUser.Rd
+396d4420f47caf7e69caff7b76752a86 *man/connectSPCSUser.Rd
 d445718a62b06d3de52944a1d97689fe *man/deployAPI.Rd
 ce2b9edc87fb74217f9e669b040ce467 *man/deployApp.Rd
 bc655fe758f1247d39ae59c8da3a7f80 *man/deployDoc.Rd
@@ -172,7 +172,7 @@ b79b40c2bac04f8ef08c85aa5c593964 *tests/testthat/_snaps/deployDoc.md
 15d48ce6f9c7533834ff0b6404d68bbb *tests/testthat/_snaps/deployments.md
 8a0be89978ab887a10808d39496e6b83 *tests/testthat/_snaps/http-libcurl.md
 50d47df591f1c7defa183afe4d3d9fed *tests/testthat/_snaps/http.md
-42446d4c8ac00460ac404ce2837b1e73 *tests/testthat/_snaps/ide.md
+2fa06bc2d719f1ad09cc7e31193e3796 *tests/testthat/_snaps/ide.md
 918758055afefa7fd276aadf9c857952 *tests/testthat/_snaps/lint.md
 afaaa4dd78bf8a1dd185ced8ddd6f90b *tests/testthat/_snaps/linters.md
 3fca8a9f7869bf2186a8f0d6bc2abec8 *tests/testthat/_snaps/secret.md
@@ -252,8 +252,8 @@ f4f14d27ca8970ffa46ec47b161dae11 *tests/testthat/test-deployments.R
 9cabae275042d049ce524edbbc0ace54 *tests/testthat/test-http-internal.R
 8aaab3172a4fe6ce522356d8c2de864e *tests/testthat/test-http-libcurl.R
 3f8cff856f96b94ce7356c6cd0db1271 *tests/testthat/test-http-rcurl.R
-9ab9e1e2d552eb0cff9f0fe3c43208d4 *tests/testthat/test-http.R
-2162e138417a9f8daa63e32ff384706a *tests/testthat/test-ide.R
+bcea74fa477ad3bbef5803a517d95229 *tests/testthat/test-http.R
+a772dba313257c3ce7fd562e1ab0484b *tests/testthat/test-ide.R
 c3f64a4f8ad648899f5c4532e95d7e6c *tests/testthat/test-lint.R
 f67a2a9c5966ce1e8eda84c2ba5bcdfe *tests/testthat/test-linters.R
 18485c4a42334bb0411f1caa9c8fbdb4 *tests/testthat/test-locale.R
@@ -269,7 +269,7 @@ f4fffcb3c1baaf6841f553e9aa7b1024 *tests/testthat/test-rmds/parameterized.Rmd
 750841ea82c751373535fa91e9d5fe9f *tests/testthat/test-servers-deprec.R
 eed7633d2a8301c2440198458640f58e *tests/testthat/test-servers.R
 3d03aed29a634daf1098730366428231 *tests/testthat/test-shinyApp/test-shinyApp.tar.gz
-8bc42fba751a6f37125cdd5f68fa15b3 *tests/testthat/test-spcs.R
+f5ebeb974cb4921026c2b9273a9343f9 *tests/testthat/test-spcs.R
 c907c603ffe887ac731f9710ea26a05e *tests/testthat/test-title.R
 56313d37cea9e72b6663a1531f6a800d *tests/testthat/test-utils.R
 a85462c6de3953c0f8aa5b32aaef5961 *tests/testthat/test-writeManifest.R

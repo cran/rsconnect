@@ -2,7 +2,7 @@ Type: Package
 Package: rsconnect
 Title: Deploy Docs, Apps, and APIs to 'Posit Connect', 'shinyapps.io',
         and 'RPubs'
-Version: 1.6.0
+Version: 1.6.1
 Authors@R: c(
     person("Aron", "Atkins", , "aron@posit.co", role = c("aut", "cre")),
     person("Toph", "Allen", role = "aut"),
@@ -34,7 +34,7 @@ Config/testthat/parallel: true
 Encoding: UTF-8
 RoxygenNote: 7.3.3
 NeedsCompilation: no
-Packaged: 2025-10-27 19:42:28 UTC; aron
+Packaged: 2025-11-03 18:43:14 UTC; aron
 Author: Aron Atkins [aut, cre],
   Toph Allen [aut],
   Hadley Wickham [aut],
@@ -43,4 +43,4 @@ Author: Aron Atkins [aut, cre],
   Posit Software, PBC [cph, fnd]
 Maintainer: Aron Atkins <aron@posit.co>
 Repository: CRAN
-Date/Publication: 2025-10-28 06:10:08 UTC
+Date/Publication: 2025-11-04 06:10:02 UTC
