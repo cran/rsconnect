@@ -1,6 +1,6 @@
-eb65f7b322f72f11f21b9a744c7d5d71 *DESCRIPTION
+d7afb089a9987b4ff0ca280236875a8a *DESCRIPTION
 1c1348f529ab6928b927a24a6567cff7 *NAMESPACE
-e0eb70fd32f7cbac048a40366c883fdc *NEWS.md
+f759f7738954a1a8f6eeb7c9305e7a6e *NEWS.md
 ac3e076f45c82f9272784163dac38889 *R/account-find.R
 a96f7489054e0926defc67406c3186f3 *R/accounts.R
 6a6a69f2ff982ee052d447e09061d1c7 *R/appDependencies.R
@@ -13,7 +13,7 @@ c3a7b4d6ef8372bc0c10c15b89967c30 *R/bundleFiles.R
 2b5ea24a941723db3dd8740ddce6cc7e *R/bundlePackage.R
 48483f0e1688b2378094004f5f473ebd *R/bundlePackagePackrat.R
 66dd46c275092d29fd809937fee2723b *R/bundlePackageRenv.R
-ca12d06a9a060b3abec9512b645fa640 *R/bundlePython.R
+193a939f005834420ff3d73f28f57015 *R/bundlePython.R
 838c7d841a617ec2d961ee1fd8f6bb3b *R/certificates.R
 4edd16aeac420e03de30adb6e5b56fde *R/client-cloudAuth.R
 d0abf2c0f384d2c3698bcc222729e64e *R/client-connect.R
@@ -78,8 +78,8 @@ c4583de8a35d29910d6b24bcf5e1fb1d *inst/examples/sessioninfo/server.R
 7dee3567e52504bac683fb9362147a36 *inst/examples/sessioninfo/ui.R
 38e870aae38d5d6c82412bcb76a8f129 *inst/resources/__pycache__/pyproject.cpython-311.pyc
 136fc6ef320db1ace0d358d52a0463a8 *inst/resources/__pycache__/pyproject.cpython-312.pyc
-9d7300ee248c6187676ffa8b6f808037 *inst/resources/environment.py
-3a00a5329efc79fccae92285604d4569 *inst/resources/pyproject.py
+45c58b53c7b90e0bd6f53512dafd05e1 *inst/resources/environment.py
+0050f2d7b039e15641549f1fd225a38c *inst/resources/pyproject.py
 c9f34c6c2962850a01716f94bd96f7ea *man/accountUsage.Rd
 ee126f9f10b2bb0daf869ef47fdeef54 *man/accounts.Rd
 f0319ddfad9a921d75d69e375504de49 *man/addAuthorizedUser.Rd
@@ -235,7 +235,7 @@ b55c1a9746764eb9e01674f20c243cca *tests/testthat/test-appDependencies.R
 5d69cacb376722960c0f79e995dabcf2 *tests/testthat/test-bundlePackage.R
 a5ebc32602e7c8988e99b1c4967c65f8 *tests/testthat/test-bundlePackagePackrat.R
 4dc5a6e138091780d9ea82b3adeea1dd *tests/testthat/test-bundlePackageRenv.R
-49dacf3d18fcae371f9f56cc8ce9d314 *tests/testthat/test-bundlePython.R
+2500cd1cd32cde66f304581123532b39 *tests/testthat/test-bundlePython.R
 3f72e23f56c6f60501bf316feb8ee66d *tests/testthat/test-cert.R
 a8095129b3019e9aa31cd2026d07fa3d *tests/testthat/test-client-connect.R
 5ffdb5a30b22609154f58f05b242e7b1 *tests/testthat/test-client-connectCloud.R
@@ -252,7 +252,7 @@ f4f14d27ca8970ffa46ec47b161dae11 *tests/testthat/test-deployments.R
 9cabae275042d049ce524edbbc0ace54 *tests/testthat/test-http-internal.R
 8aaab3172a4fe6ce522356d8c2de864e *tests/testthat/test-http-libcurl.R
 3f8cff856f96b94ce7356c6cd0db1271 *tests/testthat/test-http-rcurl.R
-bcea74fa477ad3bbef5803a517d95229 *tests/testthat/test-http.R
+532512159b775b78e3a770d001b3bf40 *tests/testthat/test-http.R
 a772dba313257c3ce7fd562e1ab0484b *tests/testthat/test-ide.R
 c3f64a4f8ad648899f5c4532e95d7e6c *tests/testthat/test-lint.R
 f67a2a9c5966ce1e8eda84c2ba5bcdfe *tests/testthat/test-linters.R
