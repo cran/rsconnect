@@ -1,6 +1,6 @@
-d7afb089a9987b4ff0ca280236875a8a *DESCRIPTION
+76a03aa4eb9f15db26039a053a59c532 *DESCRIPTION
 1c1348f529ab6928b927a24a6567cff7 *NAMESPACE
-f759f7738954a1a8f6eeb7c9305e7a6e *NEWS.md
+d68f0eecd52183f4a2f8b541f1563da0 *NEWS.md
 ac3e076f45c82f9272784163dac38889 *R/account-find.R
 a96f7489054e0926defc67406c3186f3 *R/accounts.R
 6a6a69f2ff982ee052d447e09061d1c7 *R/appDependencies.R
@@ -26,7 +26,7 @@ f1d62e26c9f2c07206bc5ef14af5d648 *R/client.R
 ecfe57fc531c5471b86d2e8b66aeb903 *R/configureApp.R
 9aa84882485c8f5d671090e6b95ebf9e *R/cookies.R
 d060f52fff395fbfdd0f22ecfa5edde2 *R/deployAPI.R
-2adc1547051dae98645cffc01daec077 *R/deployApp.R
+183ce9d2e87ab12157ad6c72593bb42e *R/deployApp.R
 2616017de8a53e8e906e7b1789a12e45 *R/deployDoc.R
 a3a19899de4e82bf44a9ae8ca9ad7e95 *R/deploySite.R
 ee95aa9b3b947052290de5d3a1b87e9e *R/deployTFModel.R
@@ -38,7 +38,7 @@ efa3ef2996873f8711ed847416fc1f75 *R/http-curl.R
 3c95fe9fa09c26248682ee38d684a7f6 *R/http-internal.R
 d0e96e22ea057eb83e91517a240fba44 *R/http-libcurl.R
 977d3af7fb490cde13c5e82495fb55b1 *R/http-rcurl.R
-024d90afd22fdaf496dc4f0928230258 *R/http.R
+ea071935ec75f3d26f06e0d32ad7c832 *R/http.R
 2e82ed0cbde92312cbdf1bd572952870 *R/ide.R
 8c5f08458cfd4e7f75a27924b2789c83 *R/import-standalone-obj-type.R
 5b49b9c463766fac246aaf38deb93504 *R/import-standalone-types-check.R
@@ -95,7 +95,7 @@ dd4a3cdf6f8a526697bbd9334d890fcf *man/authorizedUsers.Rd
 6c316d7c496d14b4018bd877e0c25c83 *man/connectCloudUser.Rd
 396d4420f47caf7e69caff7b76752a86 *man/connectSPCSUser.Rd
 d445718a62b06d3de52944a1d97689fe *man/deployAPI.Rd
-ce2b9edc87fb74217f9e669b040ce467 *man/deployApp.Rd
+1e227d7365f3035cdd6a1bfbacbe752e *man/deployApp.Rd
 bc655fe758f1247d39ae59c8da3a7f80 *man/deployDoc.Rd
 fb671b9fddb4c63c164423791f17ac99 *man/deploySite.Rd
 f1e83c56327df96eed3d87450cd86c48 *man/deployTFModel.Rd
@@ -165,7 +165,7 @@ d55d8f6de699fb2bddcb73bcd40514dd *tests/testthat/_snaps/bundlePackagePackrat.md
 fce16248e944fa4e43dbae00c5be4e3f *tests/testthat/_snaps/bundlePython.md
 922f52fb5c8eefb41b949f5f3fe39499 *tests/testthat/_snaps/client-connect.md
 e6a7dc199abad18c49f1bcf85331e6f5 *tests/testthat/_snaps/cookies.md
-32dcb31a28a533e3bbfbe5c76a764f44 *tests/testthat/_snaps/deployApp.md
+6916332a4268da5f2056e7e970f10e5a *tests/testthat/_snaps/deployApp.md
 b79b40c2bac04f8ef08c85aa5c593964 *tests/testthat/_snaps/deployDoc.md
 753d58717b2d1e2f20334b6e2d4a4ede *tests/testthat/_snaps/deploymentTarget.md
 81556421c5df0b32a4667e747e93cb89 *tests/testthat/_snaps/deployments-find.md
@@ -242,7 +242,7 @@ a8095129b3019e9aa31cd2026d07fa3d *tests/testthat/test-client-connect.R
 5dba3045adba98b41f86315dada4a28a *tests/testthat/test-client.R
 451cf6e5b95586c57eaca375fcb38423 *tests/testthat/test-config.R
 eb8bdb13d8879db70412630631304e45 *tests/testthat/test-cookies.R
-7fce38b352fd43ec89cc04d695c2efb6 *tests/testthat/test-deployApp.R
+0a8d1c10543a51f71059eda687360fa2 *tests/testthat/test-deployApp.R
 131e5ac048d8a422e43ca7890d370703 *tests/testthat/test-deployDoc.R
 e2aaac812ecd1fc3e5b49c84faebe2bd *tests/testthat/test-deploySite.R
 476013675875ba4354210fda1c0eece0 *tests/testthat/test-deploymentTarget.R

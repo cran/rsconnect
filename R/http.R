@@ -499,7 +499,7 @@ urlEncode <- function(x) {
   if (inherits(x, "AsIs")) {
     return(x)
   }
-  RCurl::curlEscape(x)
+  curl::curl_escape(x)
 }
 
 buildPath <- function(apiPath, path, query = NULL) {
@@ -641,7 +641,7 @@ rfc2616Date <- function(time = Sys.time()) {
 # Helpers -----------------------------------------------------------------
 
 userAgent <- function() {
-  paste("rsconnect", packageVersion("rsconnect"), sep = "/")
+  paste("RSConnect", packageVersion("rsconnect"), sep = "/")
 }
 
 parseHttpHeader <- function(header) {

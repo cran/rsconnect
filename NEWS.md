@@ -1,3 +1,16 @@
+# rsconnect 1.7.0
+
+* Added support for deploying from `manifest.json` files created by
+  `writeManifest()`: use the `manifestPath` argument of `deployApp()` and related
+  functions to specify the path to an existing manifest file. (#1259)
+
+* `urlEncode()` now uses `curl::curl_escape()` instead of `RCurl::curlEscape()`, 
+  as RCurl is a Suggests dependency. (#1265)
+  
+* The `User-Agent` header in requests made from rsconnect will now be of the
+  format `RSConnect/x.y.z` instead of `rsconnect/x.y.z` in order to satisfy web
+  application firewalls that enforce Pascal case.
+
 # rsconnect 1.6.2
 
 * Fix an opaque error when creating a manifest using Python <= 3.10 with a
