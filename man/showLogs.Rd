@@ -41,9 +41,9 @@ multiple servers.}
 
 \item{entries}{The number of log entries to show. Defaults to 50 entries.}
 
-\item{streaming}{Whether to stream the logs. If \code{TRUE}, then the
-function does not return; instead, log entries are written to the console
-as they are made, until R is interrupted. Defaults to \code{FALSE}.}
+\item{streaming}{Deprecated. Streaming logs is not currently supported
+as the ShinyApps.io backend no longer supports this feature. If \code{TRUE},
+an error will be thrown. Defaults to \code{FALSE}.}
 }
 \value{
 \code{getLogs()} returns a data frame containing the logged lines.
@@ -58,6 +58,6 @@ These functions provide access to the logs for deployed ShinyApps applications:
 Supported servers: ShinyApps servers
 }
 \note{
-These functions only use the \code{libcurl} transport, and only work
+These functions only work
 for applications deployed to ShinyApps.io.
 }

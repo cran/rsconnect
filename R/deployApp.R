@@ -189,6 +189,11 @@
 #'   server default if no application default is defined.
 #'
 #'   (This option is ignored when `envManagement` is non-`NULL`.)
+#' @param packageRepositoryResolutionR Optional. Specifies the package repository
+#'   resolution strategy for R packages. Must be one of `"lax"`, `"strict"`,
+#'   `"legacy"`, `"lockfile"`, or `NULL`. The default, `NULL`, will not write
+#'   any values to the bundle manifest and Connect will fall back to the
+#'   server's package repository resolution strategy.
 #' @examples
 #' \dontrun{
 #'
@@ -257,28 +262,10 @@ deployApp <- function(
   image = NULL,
   envManagement = NULL,
   envManagementR = NULL,
-  envManagementPy = NULL
+  envManagementPy = NULL,
+  packageRepositoryResolutionR = NULL
 ) {
   check_string(appDir)
-  if (isStaticFile(appDir) && !dirExists(appDir)) {
-    lifecycle::deprecate_warn(
-      when = "1.0.0",
-      what = "deployApp(appDir = 'takes a directory, not a document,')",
-      with = "deployDoc()"
-    )
-    return(deployDoc(
-      appDir,
-      appName = appName,
-      appTitle = appTitle,
-      account = account,
-      server = server,
-      upload = upload,
-      recordDir = recordDir,
-      launch.browser = launch.browser,
-      logLevel = logLevel,
-      lint = lint
-    ))
-  }
   check_directory(appDir)
   appDir <- normalizePath(appDir)
 
@@ -649,6 +636,7 @@ deployApp <- function(
       envManagement = envManagement,
       envManagementR = envManagementR,
       envManagementPy = envManagementPy,
+      packageRepositoryResolutionR = packageRepositoryResolutionR,
       existingManifest = manifest
     )
     size <- format(file_size(bundlePath), big.mark = ",")
@@ -670,7 +658,7 @@ deployApp <- function(
         bundlePath
       )
     } else {
-      bundle <- client$uploadApplication(application$id, bundlePath)
+      bundle <- client$uploadBundle(application$guid, bundlePath)
     }
     if (isPositConnectCloudServer(accountDetails$server)) {
       taskComplete(quiet, "Uploaded bundle")
@@ -886,6 +874,7 @@ bundleApp <- function(
   envManagement = NULL,
   envManagementR = NULL,
   envManagementPy = NULL,
+  packageRepositoryResolutionR = NULL,
   existingManifest = NULL
 ) {
   logger <- verboseLogger(verbose)
@@ -923,6 +912,7 @@ bundleApp <- function(
       envManagement = envManagement,
       envManagementR = envManagementR,
       envManagementPy = envManagementPy,
+      packageRepositoryResolutionR = packageRepositoryResolutionR,
       verbose = verbose,
       quiet = quiet
     )
@@ -965,13 +955,12 @@ openURL <- function(
   }
 
   # Check to see if we should open config url or app url
-  if (!is.null(client$configureApplication)) {
-    config <- client$configureApplication(application$id)
-    url <- config$config_url
-    if (!deploymentSucceeded && validURL(config$logs_url)) {
-      # With 1.5.5+, Connect application configuration includes
-      # a logs URL to be shown on unsuccessful deployment.
-      url <- config$logs_url
+  if (!is.null(application$dashboard_url)) {
+    # Posit Connect should land here because it inserts a dashboard_url
+    if (deploymentSucceeded) {
+      url <- paste(application$dashboard_url, "access", sep = "/")
+    } else {
+      url <- paste(application$dashboard_url, "logs", sep = "/")
     }
     if (validURL(url)) {
       # Connect should always end up here, even on deployment failures

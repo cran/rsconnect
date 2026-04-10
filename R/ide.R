@@ -3,7 +3,12 @@
 # This function is poorly named because as well as validating the server
 # url it will also register the server if needed.
 validateServerUrl <- function(url, certificate = NULL) {
-  res <- validateConnectUrl(url, certificate)
+  snowflakeConnectionName <- NULL
+  if (isSPCSUrl(url)) {
+    snowflakeConnectionName <- getDefaultSnowflakeConnectionName(url)
+  }
+
+  res <- validateConnectUrl(url, certificate, snowflakeConnectionName)
 
   if (res$valid) {
     name <- findAndRegisterLocalServer(res$url)
@@ -57,6 +62,16 @@ registerUserToken <- function(
   accessToken = NULL,
   refreshToken = NULL
 ) {
+  # If privateKey is empty, we're using identity federation and don't want to
+  # persist credentials.
+  if (!nzchar(privateKey)) {
+    return(registerAccount(
+      serverName = serverName,
+      accountName = accountName,
+      accountId = userId
+    ))
+  }
+
   registerAccount(
     serverName = serverName,
     accountName = accountName,

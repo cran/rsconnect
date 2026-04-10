@@ -23,31 +23,58 @@ httpRequest <- function(
   headers <- c(headers, authHeaders(authInfo, method, path), httpHeaders())
   certificate <- requestCertificate(service$protocol, authInfo$certificate)
 
-  # perform request
-  http <- httpFunction()
-  httpResponse <- http(
-    protocol = service$protocol,
-    host = service$host,
-    port = service$port,
-    method = method,
-    path = path,
-    headers = headers,
-    timeout = timeout,
-    certificate = certificate
-  )
+  if (isTRUE(getOption("rsconnect.httr2", TRUE))) {
+    # httr2 backend - handles cookies and redirects automatically
+    resp <- httr2Request(
+      service,
+      authInfo,
+      method,
+      path,
+      headers,
+      timeout,
+      certificate
+    )
+    httpResponse <- httr2_response_to_list(resp)
 
-  while (isRedirect(httpResponse$status)) {
-    service <- redirectService(service, httpResponse$location)
-    httpResponse <- http(
+    while (isRedirect(httpResponse$status)) {
+      service <- redirectService(service, httpResponse$location)
+      resp <- httr2Request(
+        service,
+        authInfo,
+        "GET",
+        service$path,
+        headers,
+        timeout,
+        certificate
+      )
+      httpResponse <- httr2_response_to_list(resp)
+    }
+  } else {
+    # Legacy libcurl backend
+    httpResponse <- httpLibCurl(
       protocol = service$protocol,
       host = service$host,
       port = service$port,
       method = method,
-      path = service$path,
+      path = path,
       headers = headers,
       timeout = timeout,
       certificate = certificate
     )
+
+    while (isRedirect(httpResponse$status)) {
+      service <- redirectService(service, httpResponse$location)
+      httpResponse <- httpLibCurl(
+        protocol = service$protocol,
+        host = service$host,
+        port = service$port,
+        method = method,
+        path = service$path,
+        headers = headers,
+        timeout = timeout,
+        certificate = certificate
+      )
+    }
   }
 
   handleResponse(
@@ -89,35 +116,63 @@ httpRequestWithBody <- function(
   authed_headers <- c(headers, authHeaders(authInfo, method, path, file))
   certificate <- requestCertificate(service$protocol, authInfo$certificate)
 
-  # perform request
-  http <- httpFunction()
-  httpResponse <- http(
-    protocol = service$protocol,
-    host = service$host,
-    port = service$port,
-    method = method,
-    path = path,
-    headers = authed_headers,
-    contentType = contentType,
-    contentFile = file,
-    certificate = certificate
-  )
-  while (isRedirect(httpResponse$status)) {
-    # This is a simplification of the spec, since we should preserve
-    # the method for 307 and 308, but that's unlikely to arise for our apps
-    # https://www.rfc-editor.org/rfc/rfc9110.html#name-redirection-3xx
-    service <- redirectService(service, httpResponse$location)
-    authed_headers <- c(headers, authHeaders(authInfo, "GET", service$path))
-    httpResponse <- http(
+  if (isTRUE(getOption("rsconnect.httr2", TRUE))) {
+    # httr2 backend - handles cookies and redirects automatically
+    resp <- httr2Request(
+      service,
+      authInfo,
+      method,
+      path,
+      authed_headers,
+      certificate = certificate,
+      contentType = contentType,
+      file = file
+    )
+    httpResponse <- httr2_response_to_list(resp)
+
+    while (isRedirect(httpResponse$status)) {
+      service <- redirectService(service, httpResponse$location)
+      authed_headers <- c(headers, authHeaders(authInfo, "GET", service$path))
+      resp <- httr2Request(
+        service,
+        authInfo,
+        "GET",
+        service$path,
+        authed_headers,
+        certificate = certificate
+      )
+      httpResponse <- httr2_response_to_list(resp)
+    }
+  } else {
+    # Legacy libcurl backend
+    httpResponse <- httpLibCurl(
       protocol = service$protocol,
       host = service$host,
       port = service$port,
-      method = "GET",
-      path = service$path,
+      method = method,
+      path = path,
       headers = authed_headers,
+      contentType = contentType,
+      contentFile = file,
       certificate = certificate
     )
-    httpResponse
+    while (isRedirect(httpResponse$status)) {
+      # This is a simplification of the spec, since we should preserve
+      # the method for 307 and 308, but that's unlikely to arise for our apps
+      # https://www.rfc-editor.org/rfc/rfc9110.html#name-redirection-3xx
+      service <- redirectService(service, httpResponse$location)
+      authed_headers <- c(headers, authHeaders(authInfo, "GET", service$path))
+      httpResponse <- httpLibCurl(
+        protocol = service$protocol,
+        host = service$host,
+        port = service$port,
+        method = "GET",
+        path = service$path,
+        headers = authed_headers,
+        certificate = certificate
+      )
+      httpResponse
+    }
   }
 
   handleResponse(
@@ -436,39 +491,6 @@ httpHeaders <- function() {
   getOption("rsconnect.http.headers", character())
 }
 
-httpFunction <- function() {
-  httpType <- getOption("rsconnect.http", "libcurl")
-
-  if (is_string(httpType) && httpType != "libcurl") {
-    lifecycle::deprecate_warn(
-      "1.0.0",
-      I("The `rsconnect.http` option"),
-      details = c(
-        "It should no longer be necessary to set this option",
-        "If the default http handler doesn't work for you, please file an issue at <https://github.com/rstudio/rsconnect/issues>"
-      )
-    )
-  }
-
-  if (identical("libcurl", httpType)) {
-    httpLibCurl
-  } else if (identical("rcurl", httpType)) {
-    httpRCurl
-  } else if (identical("curl", httpType)) {
-    httpCurl
-  } else if (identical("internal", httpType)) {
-    httpInternal
-  } else if (is.function(httpType)) {
-    httpType
-  } else {
-    stop(paste(
-      "Invalid http option specified:",
-      httpType,
-      ". Valid values are libcurl, rcurl, curl, and internal"
-    ))
-  }
-}
-
 # URL manipulation --------------------------------------------------------
 
 parseHttpUrl <- function(urlText) {
@@ -548,6 +570,12 @@ authHeaders <- function(authInfo, method, path, file = NULL) {
     # using X-RSC-Authorization.
     if (!is.null(authInfo$apiKey)) {
       headers$`X-RSC-Authorization` <- paste("Key", authInfo$apiKey)
+    }
+    # When using the "token" flow rather than an API key, we also need the
+    # signature headers.
+    if (!is.null(authInfo$secret) || !is.null(authInfo$private_key)) {
+      sig_headers <- signatureHeaders(authInfo, method, path, file)
+      headers <- c(headers, sig_headers)
     }
     headers
   } else if (!is.null(authInfo$secret) || !is.null(authInfo$private_key)) {

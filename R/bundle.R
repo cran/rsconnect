@@ -45,6 +45,21 @@ bundleAppDir <- function(
       tweakRProfile(to)
     }
   }
+
+  # When an renv profile is active, the profile-specific lockfile lives under
+  # renv/profiles/<name>/renv.lock, which is excluded from the bundle (the
+  # entire renv/ directory is ignored). Resolve the correct lockfile from the
+  # original appDir and copy it into the bundle so that
+  # parseRenvDependencies() compares against the right lockfile.
+  profileLockfile <- tryCatch(
+    resolveRenvLockFile(appDir),
+    error = function(e) NULL
+  )
+  if (!is.null(profileLockfile) && file.exists(profileLockfile)) {
+    bundleLockfile <- file.path(bundleDir, "renv.lock")
+    file.copy(profileLockfile, bundleLockfile, overwrite = TRUE)
+  }
+
   bundleDir
 }
 
@@ -175,6 +190,7 @@ createAppManifest <- function(
   envManagement = NULL,
   envManagementR = NULL,
   envManagementPy = NULL,
+  packageRepositoryResolutionR = NULL,
   verbose = FALSE,
   quiet = FALSE
 ) {
@@ -183,6 +199,14 @@ createAppManifest <- function(
     if (!is.na(imageEnv) && nchar(imageEnv) > 0) {
       image <- imageEnv
     }
+  }
+
+  # Validate packageRepositoryResolutionR
+  if (!is.null(packageRepositoryResolutionR)) {
+    match.arg(
+      packageRepositoryResolutionR,
+      c("lax", "strict", "legacy", "lockfile")
+    )
   }
 
   if (needsR(appMetadata)) {
@@ -308,7 +332,8 @@ createAppManifest <- function(
     !is.null(image) ||
       length(envManagementInfo) > 0 ||
       !is.null(rVersionReq) ||
-      !is.null(pyVersionReq)
+      !is.null(pyVersionReq) ||
+      !is.null(packageRepositoryResolutionR)
   ) {
     manifest$environment <- list()
 
@@ -317,9 +342,15 @@ createAppManifest <- function(
       manifest$environment$image <- image
     }
 
-    # if there is an R version constraint
-    if (!is.null(rVersionReq)) {
-      manifest$environment$r <- list(requires = rVersionReq)
+    # if there is an R version constraint or package repository resolution
+    if (!is.null(rVersionReq) || !is.null(packageRepositoryResolutionR)) {
+      manifest$environment$r <- list()
+      if (!is.null(rVersionReq)) {
+        manifest$environment$r$requires <- rVersionReq
+      }
+      if (!is.null(packageRepositoryResolutionR)) {
+        manifest$environment$r$package_repository_resolution <- packageRepositoryResolutionR
+      }
     }
 
     # if there is a Python version constraint

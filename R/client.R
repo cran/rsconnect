@@ -14,8 +14,23 @@ clientForAccount <- function(account) {
     )
     connectClient(serverUrl, account)
   } else {
+    # Standard Connect server - try identity federation if no credentials
+    if (hasNoCredentials(account)) {
+      ephemeralApiKey <- attemptIdentityFederation(serverInfo$url)
+      if (!is.null(ephemeralApiKey)) {
+        account$apiKey <- ephemeralApiKey
+      }
+    }
     connectClient(serverUrl, account)
   }
+}
+
+hasNoCredentials <- function(account) {
+  is.null(account$apiKey) &&
+    is.null(account$token) &&
+    is.null(account$secret) &&
+    is.null(account$private_key) &&
+    is.null(account$accessToken)
 }
 
 # Appropriate when the list API includes "count" and "total" fields in the response JSON and the API
@@ -123,7 +138,7 @@ isContentType <- function(x, contentType) {
   grepl(contentType, x, fixed = TRUE)
 }
 
-
+# These functions should move to client-shinyapps.R
 uploadShinyappsBundle <- function(
   client,
   application_id,
@@ -167,8 +182,7 @@ uploadBundle <- function(bundle, bundleSize, bundlePath) {
 
   # AWS seems very sensitive to additional headers (likely becauseit was not included and signed
   # for when the presigned link was created). So the lower level library is used here.
-  http <- httpFunction()
-  response <- http(
+  response <- httpLibCurl(
     presigned_service$protocol,
     presigned_service$host,
     presigned_service$port,

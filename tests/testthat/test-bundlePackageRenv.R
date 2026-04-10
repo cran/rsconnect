@@ -108,7 +108,7 @@ test_that("gets DESCRIPTION from renv & system libraries", {
   app_dir <- local_temp_app(list("foo.R" = "library(foreign); library(MASS)"))
   renv::snapshot(app_dir, prompt = FALSE)
 
-  deps <- parseRenvDependencies(app_dir)
+  deps <- parseRenvDependencies(file.path(app_dir, "renv.lock"), app_dir)
   expect_setequal(deps$Package, c("foreign", "MASS", "renv"))
 
   expect_type(deps$description, "list")
@@ -127,7 +127,10 @@ test_that("errors if library and project are inconsistent", {
   renv::snapshot(app_dir, prompt = FALSE)
   renv::record("MASS@0.1.1", project = app_dir)
 
-  expect_snapshot(parseRenvDependencies(app_dir), error = TRUE)
+  expect_snapshot(
+    parseRenvDependencies(file.path(app_dir, "renv.lock"), app_dir),
+    error = TRUE
+  )
 })
 
 # standardizeRenvPackage -----------------------------------------
@@ -210,7 +213,76 @@ test_that("packages installed from other repos get correctly named", {
   )
 })
 
-test_that("source packages get NA source + repository", {
+test_that("packages available in multiple repos use the one from renv.lock", {
+  # When a package is available in multiple repositories,
+  # standardizeRenvPackage should respect the Repository field from renv.lock
+  # rather than just using the first match from availablePackages
+
+  # Simulate availablePackages with both packages available from both repos
+  # Note: available.packages() returns first match with "duplicates" filter
+  packages <- rbind(
+    c(
+      Package = "pkg1",
+      Version = "1.0.0",
+      Repository = "https://cran.com/src/contrib"
+    ),
+    c(
+      Package = "pkg2",
+      Version = "2.0.0",
+      Repository = "https://cran.com/src/contrib"
+    ),
+    c(
+      Package = "pkg1",
+      Version = "1.0.0",
+      Repository = "https://og-cran.com/src/contrib"
+    ),
+    c(
+      Package = "pkg2",
+      Version = "2.0.0",
+      Repository = "https://og-cran.com/src/contrib"
+    )
+  )
+
+  repos <- c(CRAN = "https://cran.com", OG_CRAN = "https://og-cran.com")
+
+  # pkg1 should come from OG_CRAN (as specified in renv.lock)
+  pkg1 <- list(
+    Package = "pkg1",
+    Version = "1.0.0",
+    Source = "Repository",
+    Repository = "OG_CRAN"
+  )
+
+  # pkg2 should come from CRAN (as specified in renv.lock)
+  pkg2 <- list(
+    Package = "pkg2",
+    Version = "2.0.0",
+    Source = "Repository",
+    Repository = "CRAN"
+  )
+
+  expect_equal(
+    standardizeRenvPackage(pkg1, packages, repos = repos),
+    list(
+      Package = "pkg1",
+      Version = "1.0.0",
+      Source = "OG_CRAN",
+      Repository = "https://og-cran.com"
+    )
+  )
+
+  expect_equal(
+    standardizeRenvPackage(pkg2, packages, repos = repos),
+    list(
+      Package = "pkg2",
+      Version = "2.0.0",
+      Source = "CRAN",
+      Repository = "https://cran.com"
+    )
+  )
+})
+
+test_that("unknown source packages get NA source + repository", {
   source <- list(Package = "pkg", Source = "unknown", Repository = "useless")
   expect_equal(
     standardizeRenvPackage(source),
@@ -218,10 +290,46 @@ test_that("source packages get NA source + repository", {
   )
 })
 
-test_that("Local packages get NA source + repository", {
-  source <- list(Package = "pkg", Source = "Local", Repository = "useless")
+test_that("Local packages resolve from a configured repo when available", {
+  pkg <- list(Package = "pkg", Version = "1.0.0", Source = "Local")
+
+  packages <- as.matrix(data.frame(
+    Package = "pkg",
+    Version = "1.0.0",
+    Repository = "https://cran.com/src/contrib",
+    stringsAsFactors = FALSE
+  ))
+  repos <- c(CRAN = "https://cran.com")
+
   expect_equal(
-    standardizeRenvPackage(source),
-    list(Package = "pkg", Source = NA_character_, Repository = NA_character_)
+    standardizeRenvPackage(pkg, packages, repos = repos),
+    list(
+      Package = "pkg",
+      Version = "1.0.0",
+      Source = "CRAN",
+      Repository = "https://cran.com"
+    )
+  )
+})
+
+test_that("Local packages get NA source + repository when not in any repo", {
+  pkg <- list(Package = "pkg", Version = "1.0.0", Source = "Local")
+
+  packages <- as.matrix(data.frame(
+    Package = "otherpkg",
+    Version = "1.0.0",
+    Repository = "https://cran.com/src/contrib",
+    stringsAsFactors = FALSE
+  ))
+  repos <- c(CRAN = "https://cran.com")
+
+  expect_equal(
+    standardizeRenvPackage(pkg, packages, repos = repos),
+    list(
+      Package = "pkg",
+      Version = "1.0.0",
+      Source = NA_character_,
+      Repository = NA_character_
+    )
   )
 })

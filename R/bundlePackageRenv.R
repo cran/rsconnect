@@ -30,13 +30,19 @@ snapshotRenvDependencies <- function(
     progress = FALSE
   )
   renv::snapshot(bundleDir, packages = deps$Package, prompt = FALSE)
+  # renv::snapshot() respects RENV_PATHS_LOCKFILE and renv profiles, so the
+  # lockfile may have been written to a non-standard location.
+  lockfile <- resolveRenvLockFile(bundleDir)
+  if (is.null(lockfile)) {
+    cli::cli_abort("renv::snapshot() did not produce a lockfile")
+  }
   defer(removeRenv(bundleDir))
 
-  parseRenvDependencies(bundleDir, snapshot = TRUE)
+  parseRenvDependencies(lockfile, bundleDir, snapshot = TRUE)
 }
 
-parseRenvDependencies <- function(bundleDir, snapshot = FALSE) {
-  renvLock <- jsonlite::read_json(renvLockFile(bundleDir))
+parseRenvDependencies <- function(lockfile, bundleDir, snapshot = FALSE) {
+  renvLock <- jsonlite::read_json(lockfile)
   repos <- setNames(
     vapply(renvLock$R$Repositories, "[[", "URL", FUN.VALUE = character(1)),
     vapply(renvLock$R$Repositories, "[[", "Name", FUN.VALUE = character(1))
@@ -113,15 +119,29 @@ standardizeRenvPackage <- function(
       }
     } else {
       # $Repository comes from DESCRIPTION and is set by repo, so can be
-      # anything. So we must look up from the package name
+      # anything. First check if it matches a known repository name,
+      # otherwise look up from the package name in availablePackages
+      # Note: our terminology is confusing: the name of the repsoitory is
+      # we call "Source" even though renv uses "Repository" and the URL of
+      # the repository we call "Repository"
       originalRepository <- pkg$Repository
-      pkg$Repository <- findRepoUrl(pkg$Package, availablePackages)
-      pkg$Source <- findRepoName(pkg$Repository, repos)
-      if (is.na(pkg$Source)) {
-        # Archived packages are not publicized by available.packages(). Use
-        # the renv.lock repository as source, expecting that the package is
-        # available through one of the repository URLs.
+
+      if (
+        !is.null(originalRepository) && originalRepository %in% names(repos)
+      ) {
+        # Use the repository specified in renv.lock
+        pkg$Repository <- repos[[originalRepository]]
         pkg$Source <- originalRepository
+      } else {
+        # Fall back to looking up from availablePackages
+        pkg$Repository <- findRepoUrl(pkg$Package, availablePackages)
+        pkg$Source <- findRepoName(pkg$Repository, repos)
+        if (is.na(pkg$Source)) {
+          # Archived packages are not publicized by available.packages(). Use
+          # the renv.lock repository as source, expecting that the package is
+          # available through one of the repository URLs.
+          pkg$Source <- originalRepository
+        }
       }
     }
   } else if (pkg$Source == "Bioconductor") {
@@ -132,7 +152,17 @@ standardizeRenvPackage <- function(
     }
   } else if (pkg$Source %in% c("Bitbucket", "GitHub", "GitLab")) {
     pkg$Source <- tolower(pkg$Source)
-  } else if (pkg$Source %in% c("Local", "unknown")) {
+  } else if (pkg$Source == "Local") {
+    # A locally-installed package (e.g. via pak "local::") may still be
+    # available from a configured repository. Make a best effort to locate
+    # it, the same way we handle packages installed from source.
+    pkg$Repository <- findRepoUrl(pkg$Package, availablePackages)
+    pkg$Source <- findRepoName(pkg$Repository, repos)
+    if (is.na(pkg$Source)) {
+      pkg$Source <- NA_character_
+      pkg$Repository <- NA_character_
+    }
+  } else if (pkg$Source == "unknown") {
     pkg$Source <- NA_character_
     pkg$Repository <- NA_character_
   }
@@ -154,13 +184,25 @@ biocRepos <- function(bundleDir) {
   repos[setdiff(names(repos), "CRAN")]
 }
 
-renvLockFile <- function(bundleDir) {
-  file.path(bundleDir, "renv.lock")
+# Find the renv lockfile, checking both the renv-resolved path and the
+# standard location. Returns the path if found, NULL otherwise.
+resolveRenvLockFile <- function(bundleDir) {
+  resolved <- renv::paths$lockfile(project = bundleDir)
+  if (file.exists(resolved)) {
+    return(resolved)
+  }
+
+  standard <- file.path(bundleDir, "renv.lock")
+  if (file.exists(standard)) {
+    return(standard)
+  }
+
+  NULL
 }
 
 removeRenv <- function(path, lockfile = TRUE) {
   if (lockfile) {
-    unlink(renvLockFile(path))
+    unlink(resolveRenvLockFile(path))
   }
   unlink(file.path(path, "renv"), recursive = TRUE)
 }
