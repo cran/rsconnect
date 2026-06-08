@@ -206,6 +206,8 @@ handleResponse <- function(
     cli::cli_abort(
       c("<{url}> failed with HTTP status {response$status}", "{msg}"),
       class = c(paste0("rsconnect_http_", response$status), "rsconnect_http"),
+      status = response$status,
+      url = url,
       errorType = errorType,
       call = error_call
     )
@@ -476,7 +478,7 @@ httpTrace <- function(method, path, time) {
       " ",
       path,
       " ",
-      as.integer(time[["elapsed"]] * 1000),
+      as.integer(time * 1000),
       "ms\n",
       sep = ""
     )

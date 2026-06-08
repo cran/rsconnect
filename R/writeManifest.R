@@ -32,10 +32,13 @@ writeManifest <- function(
   envManagement = NULL,
   envManagementR = NULL,
   envManagementPy = NULL,
+  envManagementNodejs = NULL,
   packageRepositoryResolutionR = NULL,
+  dependencyResolution = c("strict", "library"),
   verbose = FALSE,
   quiet = FALSE
 ) {
+  dependencyResolution <- match.arg(dependencyResolution)
   appFiles <- listDeploymentFiles(
     appDir,
     appFiles = appFiles,
@@ -63,6 +66,10 @@ writeManifest <- function(
   python <- getPython(python)
   pythonConfig <- pythonConfigurator(python, forceGeneratePythonEnvironment)
 
+  if (dependencyResolution == "library") {
+    confirmDependencySourceLibrary()
+  }
+
   # generate the manifest and write it into the bundle dir
   manifest <- createAppManifest(
     appDir = bundleDir,
@@ -73,7 +80,9 @@ writeManifest <- function(
     envManagement = envManagement,
     envManagementR = envManagementR,
     envManagementPy = envManagementPy,
+    envManagementNodejs = envManagementNodejs,
     packageRepositoryResolutionR = packageRepositoryResolutionR,
+    dependencyResolution = dependencyResolution,
     verbose = verbose,
     quiet = quiet
   )

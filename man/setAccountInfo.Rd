@@ -32,9 +32,10 @@ removeAccount("user")
 
 }
 \seealso{
-Other Account functions: 
-\code{\link{accounts}()},
-\code{\link{connectApiUser}()},
-\code{\link{connectCloudUser}()}
+Other Account functions:
+\code{\link[=accounts]{accounts()}},
+\code{\link[=connectApiUser]{connectApiUser()}},
+\code{\link[=connectCloudClientCredentials]{connectCloudClientCredentials()}},
+\code{\link[=connectCloudUser]{connectCloudUser()}}
 }
 \concept{Account functions}

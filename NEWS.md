@@ -1,3 +1,44 @@
+# rsconnect 1.10.0
+
+# rsconnect 1.9.0
+
+* Added support for deploying Node.js applications to Posit Connect.
+  `deployApp()` and `writeManifest()` now automatically detect Node.js content
+  from `package.json` and generate the appropriate manifest. Added
+  `envManagementNodejs` parameter for controlling Node.js environment
+  management. [Node.js support](https://docs.posit.co/connect/user/nodejs/) is
+  in Early Access as of Connect version 2026.04.0. (#1322)
+
+* Added a new function, `connectCloudClientCredentials`, for adding Posit Connect
+  Cloud credentials (managed at https://login.posit.cloud/identity/credentials)
+  non-interactively.
+
+* Fixed an issue where Bioconductor packages could be incorrectly associated
+  with a CRAN repository URL when the same package appeared in CRAN's Transit
+  directory. (#1314)
+
+* The global deployment history file used by the Workbench dashboard no longer
+  uses a fixed temporary file name during updates, eliminating a race
+  condition that could cause the file to rapidly grow during concurrent
+  deployments. The history is also capped at 100 records and resets if the
+  file grows excessively large. (#1320)
+
+* `deployApp()` with `logLevel = "verbose"` no longer errors using the `httr2` backend. (#1312)
+
+* `deployApp()`, `writeManifest()`, and `appDependencies()` gain a
+  `dependencyResolution` parameter. Set `dependencyResolution = "library"` to ignore
+  the `renv.lock` file and resolve package dependencies by scanning the code.
+  The version that is recorded is what is installed in the libraries active in the
+  R session (i.e. what is displayed with `.libPaths()`). This is useful when
+  deploying from environments where there is a mismatch between the
+  renv lock file and the user's environment. (#1046, #1315, #1317)
+
+* Improved error messages when `renv::snapshot()` fails during dependency
+  discovery. (#1078)
+  
+  * `addServer()` now reports the underlying reason a URL was rejected (e.g.
+  connection error, TLS/certificate problem, or unexpected HTTP status). (#1197)
+
 # rsconnect 1.8.0
 
 * `rsconnect` now uses [`httr2`](https://httr2.r-lib.org/) as its HTTP client.
@@ -41,7 +82,6 @@
 * Removed several functions, including `addConnectServer()` and
   `discoverServer()`, as well as HTTP backends other than libcurl,
   which were deprecated in rsconnect 1.0.0. (#1282)
-
 
 # rsconnect 1.7.0
 

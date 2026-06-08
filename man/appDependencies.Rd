@@ -8,7 +8,8 @@ appDependencies(
   appDir = getwd(),
   appFiles = NULL,
   appFileManifest = NULL,
-  appMode = NULL
+  appMode = NULL,
+  dependencyResolution = c("strict", "library")
 )
 }
 \arguments{
@@ -26,9 +27,17 @@ exclusions and files listed in a \code{.rscignore} file. See
 Provide this option when the inferred type of content is incorrect. This
 can happen, for example, when static HTML content includes a downloadable
 Shiny application \code{app.R}. Accepted values include \code{"shiny"}, \code{"api"},
-\code{"rmd-static"}, \code{"rmd-shiny"}, \code{"quarto-static"}, \code{"quarto-shiny"}, and
-\code{"static"}. The Posit Connect API Reference contains a full set of
-available values. Not all servers support all types of content.}
+\code{"rmd-static"}, \code{"rmd-shiny"}, \code{"quarto-static"}, \code{"quarto-shiny"},
+\code{"nodejs"}, and \code{"static"}. The Posit Connect API Reference contains a
+full set of available values. Not all servers support all types of content.}
+
+\item{dependencyResolution}{Controls how R package dependencies are resolved.
+Must be one of \code{"strict"} or \code{"library"}. When \code{"strict"}, the
+\code{renv.lock} file is used if present and must match the local library.
+When \code{"library"}, the lockfile is ignored and dependencies are resolved
+from the available local libraries instead. This is useful when the
+lockfile is out of sync with the local library and cannot be updated. Note that the deployed content will
+reflect the local library, not the lockfile. Defaults to \code{"strict"}.}
 }
 \value{
 A data frame with one row for each dependency (direct, indirect,

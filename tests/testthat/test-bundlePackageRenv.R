@@ -97,6 +97,20 @@ test_that("large directories are analyzed", {
   expect_contains(deps$Package, "foreign")
 })
 
+test_that("errors when renv::snapshot fails", {
+  local_mocked_bindings(
+    dependencies = function(...) data.frame(Package = "fakepkg"),
+    snapshot = function(...) stop("can't snapshot this package"),
+    .package = "renv"
+  )
+
+  app_dir <- local_temp_app(list("foo.R" = "library(foreign)"))
+  expect_snapshot(
+    snapshotRenvDependencies(app_dir),
+    error = TRUE
+  )
+})
+
 # parseRenvDependencies ---------------------------------------------------
 
 test_that("gets DESCRIPTION from renv & system libraries", {
@@ -118,19 +132,36 @@ test_that("gets DESCRIPTION from renv & system libraries", {
 
 
 test_that("errors if library and project are inconsistent", {
-  skip_if_not_installed("foreign")
-  skip_if_not_installed("MASS")
-
   withr::local_options(renv.verbose = FALSE)
 
-  app_dir <- local_temp_app(list("foo.R" = "library(foreign); library(MASS)"))
+  app_dir <- local_temp_app(list("foo.R" = "library(withr)"))
   renv::snapshot(app_dir, prompt = FALSE)
-  renv::record("MASS@0.1.1", project = app_dir)
+  renv::record("withr@0.1.1", project = app_dir)
 
   expect_snapshot(
     parseRenvDependencies(file.path(app_dir, "renv.lock"), app_dir),
     error = TRUE
   )
+})
+
+test_that("dependencyResolution = 'library' bypasses lockfile and uses local library", {
+  skip_on_cran()
+
+  withr::local_options(renv.verbose = FALSE)
+
+  app_dir <- local_temp_app(list("foo.R" = "library(withr)"))
+  renv::snapshot(app_dir, prompt = FALSE)
+  renv::record("withr@0.1.1", project = app_dir)
+
+  # Without dependencyResolution = "library", this would error with "out of sync"
+  deps <- computePackageDependencies(
+    app_dir,
+    quiet = TRUE,
+    dependencyResolution = "library"
+  )
+  expect_true("withr" %in% deps$Package)
+  withr_dep <- deps[deps$Package == "withr", ]
+  expect_true(withr_dep$Version != "0.1.1")
 })
 
 # standardizeRenvPackage -----------------------------------------
@@ -167,6 +198,25 @@ test_that("BioC gets normalized repo", {
     standardizeRenvPackage(Bioconductor, packages),
     list(Package = "pkg", Source = "Bioconductor", Repository = "https://b.com")
   )
+})
+
+test_that("BioC prefers biocPackages over availablePackages (#1314)", {
+  bioc_pkg <- list(Package = "S4Vectors", Source = "Bioconductor")
+
+  avail <- data.frame(
+    Package = "S4Vectors",
+    Repository = "https://cran.rstudio.com/src/contrib/Transit",
+    stringsAsFactors = FALSE
+  )
+
+  bioc <- data.frame(
+    Package = "S4Vectors",
+    Repository = "https://bioconductor.org/packages/3.22/bioc/src/contrib",
+    stringsAsFactors = FALSE
+  )
+
+  result <- standardizeRenvPackage(bioc_pkg, avail, biocPackages = bioc)
+  expect_equal(result$Repository, "https://bioconductor.org/packages/3.22/bioc")
 })
 
 test_that("has special handling for CRAN packages", {

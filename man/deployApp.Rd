@@ -35,7 +35,9 @@ deployApp(
   envManagement = NULL,
   envManagementR = NULL,
   envManagementPy = NULL,
-  packageRepositoryResolutionR = NULL
+  envManagementNodejs = NULL,
+  packageRepositoryResolutionR = NULL,
+  dependencyResolution = c("strict", "library")
 )
 }
 \arguments{
@@ -121,9 +123,9 @@ You can find the \code{appId} in the following places:
 Provide this option when the inferred type of content is incorrect. This
 can happen, for example, when static HTML content includes a downloadable
 Shiny application \code{app.R}. Accepted values include \code{"shiny"}, \code{"api"},
-\code{"rmd-static"}, \code{"rmd-shiny"}, \code{"quarto-static"}, \code{"quarto-shiny"}, and
-\code{"static"}. The Posit Connect API Reference contains a full set of
-available values. Not all servers support all types of content.}
+\code{"rmd-static"}, \code{"rmd-shiny"}, \code{"quarto-static"}, \code{"quarto-shiny"},
+\code{"nodejs"}, and \code{"static"}. The Posit Connect API Reference contains a
+full set of available values. Not all servers support all types of content.}
 
 \item{contentCategory}{Optional; classifies the kind of content being
 deployed (e.g. \code{"plot"} or \code{"site"}).}
@@ -204,15 +206,15 @@ executing this content. If none is provided, Posit Connect will
 attempt to choose an image based on the content requirements. You can
 override the default by setting the environment variable \code{RSCONNECT_IMAGE}.}
 
-\item{envManagement}{Optional. Should Posit Connect install R and Python
-packages for this content? (\code{TRUE}, \code{FALSE}, or \code{NULL}).
+\item{envManagement}{Optional. Should Posit Connect install packages
+for this content? (\code{TRUE}, \code{FALSE}, or \code{NULL}).
 The default, \code{NULL}, will not write any values to the bundle manifest,
 and Connect will fall back to the application default environment
 management strategy, or the server default if no application default
 is defined.
 
-(This option is a shorthand flag which overwrites the values of both
-\code{envManagementR} and \code{envManagementPy}.)}
+(This option is a shorthand flag which overwrites the values of
+\code{envManagementR}, \code{envManagementPy}, and \code{envManagementNodejs}.)}
 
 \item{envManagementR}{Optional. Should Posit Connect install R packages
 for this content? (\code{TRUE}, \code{FALSE}, or \code{NULL}). The default, \code{NULL}, will
@@ -230,11 +232,27 @@ server default if no application default is defined.
 
 (This option is ignored when \code{envManagement} is non-\code{NULL}.)}
 
+\item{envManagementNodejs}{Optional. Should Posit Connect install Node.js
+packages for this content? (\code{TRUE}, \code{FALSE}, or \code{NULL}). The default,
+\code{NULL}, will not write any values to the bundle manifest, and Connect will
+fall back to the application default Node.js environment management
+strategy, or the server default if no application default is defined.
+
+(This option is ignored when \code{envManagement} is non-\code{NULL}.)}
+
 \item{packageRepositoryResolutionR}{Optional. Specifies the package repository
 resolution strategy for R packages. Must be one of \code{"lax"}, \code{"strict"},
 \code{"legacy"}, \code{"lockfile"}, or \code{NULL}. The default, \code{NULL}, will not write
 any values to the bundle manifest and Connect will fall back to the
 server's package repository resolution strategy.}
+
+\item{dependencyResolution}{Controls how R package dependencies are resolved.
+Must be one of \code{"strict"} or \code{"library"}. When \code{"strict"}, the
+\code{renv.lock} file is used if present and must match the local library.
+When \code{"library"}, the lockfile is ignored and dependencies are resolved
+from the available local libraries instead. This is useful when the
+lockfile is out of sync with the local library and cannot be updated. Note that the deployed content will
+reflect the local library, not the lockfile. Defaults to \code{"strict"}.}
 }
 \description{
 Deploy a \link[shiny:shiny-package]{shiny} application, an
@@ -304,11 +322,11 @@ deployApp("~/projects/shiny/app1", manifestPath = "manifest.json")
 \seealso{
 \code{\link[=applications]{applications()}}, \code{\link[=terminateApp]{terminateApp()}}, and \code{\link[=restartApp]{restartApp()}}
 
-Other Deployment functions: 
-\code{\link{applications}()},
-\code{\link{deployAPI}()},
-\code{\link{deployDoc}()},
-\code{\link{deploySite}()},
-\code{\link{deployTFModel}()}
+Other Deployment functions:
+\code{\link[=applications]{applications()}},
+\code{\link[=deployAPI]{deployAPI()}},
+\code{\link[=deployDoc]{deployDoc()}},
+\code{\link[=deploySite]{deploySite()}},
+\code{\link[=deployTFModel]{deployTFModel()}}
 }
 \concept{Deployment functions}
