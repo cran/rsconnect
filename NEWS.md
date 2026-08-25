@@ -1,3 +1,22 @@
+# rsconnect 1.11.0
+
+* rsconnect checks whether a newer version of itself is available from your
+  configured repositories, and lets you know: as a startup message when the
+  package is attached interactively, and as a note appended to deployment errors
+  otherwise. `deployApp()` also reports the rsconnect version in use (and the
+  newer version, when one is known) so that captured deploy logs record it. The
+  check can be disabled by setting `options(rsconnect.check_updates = FALSE)`.
+  (#1342)
+
+* New `migrateToConnectCloud()` rewrites a local deployment record so a
+  previously-deployed app (e.g. deployed to shinyapps.io) points at an
+  existing Posit Connect Cloud content item instead, so the next deploy
+  (including the RStudio IDE's Publish button) routes to Connect Cloud. If no
+  Connect Cloud account is registered yet, it guides you through setting one
+  up first. When the local deployment record has been lost, it reconstructs
+  the record from `contentId` alone, taking the name from `appName` or the
+  content's title. (#1353)
+  
 # rsconnect 1.10.1
 
 * Fixed a regression where `deployApp()` and `writeManifest()` would install

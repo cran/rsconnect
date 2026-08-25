@@ -22,8 +22,7 @@ test_that("authHeaders() picks correct method based on supplied fields", {
     rfc2616Date = function() "Thu, 09 Mar 2023 14:29:00 GMT"
   )
 
-  # Dummy key created with
-  # openssl::base64_encode(openssl::rsa_keygen(2048L))
+  # Created with `openssl::base64_encode(openssl::rsa_keygen(2048L))`
   key_string <- "-----BEGIN PRIVATE KEY-----
 MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC/eiSQAKXADslq
 GGsbsQu2eEgEHD06BtUhaeU1nvsY7a6u12xpG0OAGYWhnGhR+1K/3qoZQQNmN0MC
@@ -195,6 +194,36 @@ test_that("http error includes status in error class", {
   expect_error(
     GET(service, list(), path = "status/403"),
     class = "rsconnect_http_403"
+  )
+})
+
+test_that("http errors mention a newer rsconnect version when one is known", {
+  skip_if_not_installed("webfakes")
+
+  service <- httpbin_service()
+  local_mocked_bindings(checkForNewerVersion = function(...) "99.0.0")
+  local_mocked_bindings(
+    packageVersion = function(...) package_version("1.10.0.9000"),
+    .package = "utils"
+  )
+
+  expect_snapshot(
+    error = TRUE,
+    GET(service, list(), path = "status/404"),
+    transform = strip_port(service)
+  )
+})
+
+test_that("http errors don't mention a version hint when none is known", {
+  skip_if_not_installed("webfakes")
+
+  service <- httpbin_service()
+  local_mocked_bindings(checkForNewerVersion = function(...) NULL)
+
+  expect_snapshot(
+    error = TRUE,
+    GET(service, list(), path = "status/404"),
+    transform = strip_port(service)
   )
 })
 

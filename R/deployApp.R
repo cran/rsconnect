@@ -55,9 +55,9 @@
 #'   `_` and `-`. The application name is used to identify applications on a
 #'   server, so must be unique.
 #'
-#'   If not specified, the first deployment will be automatically it from the
-#'   `appDir` for directory and website, and from the `appPrimaryDoc` for
-#'   document. On subsequent deploys, it will use the previously stored value.
+#'   If not specified, the name is automatically derived on the first deployment
+#'   from `appDir` for applications and websites, and from `appPrimaryDoc` for
+#'   documents. On subsequent deploys, the previously stored value is used.
 #' @param appTitle Free-form descriptive title of application. Optional; if
 #'   supplied, will often be displayed in favor of the name. If omitted,
 #'   on second and subsequent deploys, the title will be unchanged.
@@ -434,6 +434,10 @@ deployApp <- function(
 
   if (!quiet) {
     cli::cli_rule("Preparing for deployment")
+    newer <- tryCatch(checkForNewerVersion(), error = function(e) NULL)
+    cli::cli_alert_info(
+      deployVersionMessage(utils::packageVersion("rsconnect"), newer)
+    )
   }
 
   forceUpdate <- forceUpdate %||%
@@ -750,9 +754,18 @@ deployApp <- function(
   }
   if (!quiet) {
     if (deploymentSucceeded) {
-      cli::cli_alert_success(
-        "Successfully deployed to {.url {application$url}}"
-      )
+      if (isTRUE(nzchar(application$url))) {
+        cli::cli_alert_success(
+          "Successfully deployed to {.url {application$url}}"
+        )
+      } else {
+        # Connect Cloud's awaitCompletion() falls back to an empty url when
+        # it can't resolve the content's URL -- don't render a broken-looking
+        # "deployed to <>" message in that case.
+        cli::cli_alert_success(
+          "Successfully deployed (the content URL could not be determined)"
+        )
+      }
     } else {
       cli::cli_alert_danger("Deployment failed with error: {response$error}")
     }
@@ -1063,7 +1076,11 @@ openURL <- function(
     }
   } else if (deploymentSucceeded) {
     # shinyapps.io should land here if things succeeded
-    showURL(application$url)
+    if (validURL(application$url)) {
+      showURL(application$url)
+    }
+    # else: succeeded, but no valid URL to open (e.g. Connect Cloud
+    # couldn't resolve one) -- nothing to browse to.
   } else if (is.function(on.failure)) {
     on.failure(NULL)
   }
