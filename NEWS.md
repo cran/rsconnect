@@ -1,3 +1,55 @@
+# rsconnect 1.11.1
+
+* Redeploying to Posit Connect now opens the content in the Connect dashboard,
+  rather than in standalone view, matching initial deploys (#1372).
+
+* Connect Cloud deployments no longer send empty values for environment
+  variables that are unset in the current R session. (#1361)
+
+* Deploying to Posit Connect Cloud from a pre-generated `manifest.json`
+  (`deployApp(manifestPath=)`) no longer fails with a null `primary_file`.
+  The primary file is now inferred from the file list even when `appMode` is
+  supplied. (#1366)
+
+* Redeploying Posit Connect Cloud content whose initial publish failed
+  (leaving it with no current revision) no longer fails with "Invalid token".
+  rsconnect previously treated a null current revision as newly-created content
+  and skipped requesting a fresh bundle upload URL, so it reused an expired
+  token; it now always requests a fresh upload URL when deploying to existing
+  content. (#1370)
+
+* `deployApp(upload = FALSE)` no longer errors with
+  `object 'bundle' not found` on Posit Connect Cloud. (#1369)
+
+* Deploying to Posit Connect Cloud content that has no environment variables
+  no longer fails on R < 4.2.0 with "zero-length inputs cannot be mixed with
+  those of non-zero length". (#1378)
+
+* `deployApp(appId=)` now works for Posit Connect Cloud content. Deploying to
+  an existing content item by id (rather than via a local deployment record)
+  previously errored with "attempt to apply non-function". (#1367)
+
+* `showUsers()` and `showInvited()` now always return a data frame with
+  atomic `character`/`logical` columns, including a typed 0-row data frame
+  (rather than `NULL`) when there are no results. User ids are now always
+  `character` (previously numeric on shinyapps.io). On Posit Connect Cloud,
+  `showUsers()` also includes `display_name` and `role` columns; the
+  `account` column is populated only on shinyapps.io and is `NA` on Connect
+  Cloud.
+
+* `addAuthorizedUser()`, `removeAuthorizedUser()`, `showUsers()`,
+  `showInvited()`, and `resendInvitation()` now work with Posit Connect Cloud
+  accounts in addition to ShinyApps. On Posit Connect Cloud, the `sendEmail`
+  argument to `addAuthorizedUser()` is ignored because PCC always emails
+  invitees; a warning is emitted when it is explicitly set to `FALSE`. On Posit
+  Connect Cloud these functions also accept a `contentId` argument that targets
+  the content directly (the id is shown in the content URL and returned by
+  `applications()`), so a local deployment record is not required; `contentId`
+  is not supported on shinyapps.io.
+
+* `applications()` now supports Posit Connect Cloud accounts, returning a
+  data frame with the same columns as for ShinyApps and Posit Connect accounts.
+
 # rsconnect 1.11.0
 
 * rsconnect checks whether a newer version of itself is available from your
@@ -16,7 +68,7 @@
   up first. When the local deployment record has been lost, it reconstructs
   the record from `contentId` alone, taking the name from `appName` or the
   content's title. (#1353)
-  
+
 # rsconnect 1.10.1
 
 * Fixed a regression where `deployApp()` and `writeManifest()` would install
@@ -67,7 +119,7 @@
 
 * Improved error messages when `renv::snapshot()` fails during dependency
   discovery. (#1078)
-  
+
   * `addServer()` now reports the underlying reason a URL was rejected (e.g.
   connection error, TLS/certificate problem, or unexpected HTTP status). (#1197)
 

@@ -472,6 +472,79 @@ test_that("can find existing application on shinyapps.io & not use it", {
   confirm_existing_app_not_used("shinyapps.io")
 })
 
+test_that("PCC deploy with no local record creates new content, not adopting same-titled existing", {
+  local_temp_config()
+  addTestServer(
+    url = "https://connect.posit.cloud",
+    name = "connect.posit.cloud"
+  )
+  addTestAccount("myaccount", server = "connect.posit.cloud")
+
+  # getAppByName is mocked to prove it is NOT called on PCC.
+  # Without the guard, getAppByName would return the existing app and forceUpdate = TRUE
+  # would adopt it (appId = "existing-uuid-123"). With the guard, getAppByName is
+  # never reached → falls through to create-new → appId = NULL.
+  local_mocked_bindings(
+    getAppByName = function(...) {
+      data.frame(
+        name = "my_app",
+        id = "existing-uuid-123",
+        url = "https://connect.posit.cloud/myaccount/content/existing-uuid-123",
+        stringsAsFactors = FALSE
+      )
+    }
+  )
+
+  app_dir <- dirCreate(file.path(withr::local_tempdir(), "my_app"))
+
+  target <- findDeploymentTarget(
+    app_dir,
+    appName = "my_app",
+    account = "myaccount",
+    server = "connect.posit.cloud",
+    forceUpdate = TRUE
+  )
+  # Guard skips getAppByName on PCC; falls through to createDeployment(appId = NULL)
+  expect_null(target$deployment$appId)
+  expect_equal(target$deployment$name, "my_app")
+})
+
+test_that("findDeploymentTargetByAppId works for PCC with no local deployment record", {
+  local_temp_config()
+  addTestServer(
+    url = "https://connect.posit.cloud",
+    name = "connect.posit.cloud"
+  )
+  addTestAccount("myaccount", server = "connect.posit.cloud")
+
+  local_mocked_bindings(
+    clientForAccount = function(...) {
+      list(
+        getApplication = function(applicationId, deploymentRecordVersion) {
+          list(
+            id = applicationId,
+            title = "My PCC App",
+            # Real client derives a valid record name from the title.
+            name = "my_pcc_app"
+          )
+        }
+      )
+    }
+  )
+
+  app_dir <- withr::local_tempdir()
+
+  target <- findDeploymentTarget(
+    app_dir,
+    appId = "pcc-content-uuid",
+    account = "myaccount",
+    server = "connect.posit.cloud"
+  )
+  expect_equal(target$deployment$appId, "pcc-content-uuid")
+  expect_equal(target$deployment$name, "my_pcc_app")
+  expect_equal(target$accountDetails$server, "connect.posit.cloud")
+})
+
 # helpers -----------------------------------------------------------------
 
 test_that("shouldUpdateApp errors when non-interactive", {
