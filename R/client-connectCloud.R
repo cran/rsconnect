@@ -199,11 +199,7 @@ connectCloudClient <- function(service, authInfo) {
     list(data = accounts)
   }
 
-  list(
-    service = function() {
-      "connect.posit.cloud"
-    },
-
+  self <- list(
     currentUser = function() {
       GET(service, authInfo, "/users/me")
     },
@@ -255,7 +251,8 @@ connectCloudClient <- function(service, authInfo) {
       accountId,
       appMode,
       primaryFile,
-      envVars
+      envVars,
+      access = NULL
     ) {
       title <- if (nzchar(title)) title else name
       contentType <- cloudContentTypeFromAppMode(appMode)
@@ -276,6 +273,8 @@ connectCloudClient <- function(service, authInfo) {
         next_revision = revision,
         secrets = secrets
       )
+      # Omit when NULL so the server picks the default for the account's plan.
+      json$access <- access
 
       content <- withTokenRefreshRetry(
         POST_JSON,
@@ -299,7 +298,8 @@ connectCloudClient <- function(service, authInfo) {
       envVars,
       newBundle = FALSE,
       primaryFile,
-      appMode
+      appMode,
+      access = NULL
     ) {
       path <- paste0("/contents/", contentId)
       if (newBundle) {
@@ -315,6 +315,8 @@ connectCloudClient <- function(service, authInfo) {
           app_mode = appMode
         )
       )
+      # Omit when NULL so a redeploy keeps visibility changed in the Cloud UI.
+      json$access <- access
 
       content <- withTokenRefreshRetry(PATCH_JSON, path, json)
       content$application_id <- content$id
@@ -497,6 +499,12 @@ connectCloudClient <- function(service, authInfo) {
       })
     },
 
+    deleteContent = function(contentId) {
+      path <- paste0("/contents/", contentId)
+      withTokenRefreshRetry(DELETE, path)
+      invisible(TRUE)
+    },
+
     removeApplicationUser = function(appId, userId) {
       path <- paste0("/contents/", appId, "/users/", userId)
       withTokenRefreshRetry(DELETE, path)
@@ -536,4 +544,5 @@ connectCloudClient <- function(service, authInfo) {
       invisible(TRUE)
     }
   )
+  structure(self, class = c("connectCloudClient", "rsconnectClient"))
 }

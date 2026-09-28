@@ -810,6 +810,33 @@ test_that("removeApplicationUser DELETEs /contents/{id}/users/{userId} and retur
   expect_true(result)
 })
 
+test_that("deleteContent DELETEs /contents/{id} and returns TRUE", {
+  skip_if_not_installed("webfakes")
+
+  delete_app <- webfakes::new_app()
+  delete_app$delete("/contents/:id", function(req, res) {
+    if (identical(req$params$id, "content-abc")) {
+      res$set_status(204L)$send("")
+    } else {
+      res$set_status(404L)$send("")
+    }
+  })
+  app <- webfakes::local_app_process(delete_app)
+  service <- parseHttpUrl(app$url())
+
+  authInfo <- list(
+    server = "connect.posit.cloud",
+    name = "some-user",
+    username = "some-user",
+    accountId = "123",
+    accessToken = "current-token",
+    refreshToken = "refresh-token"
+  )
+  client <- connectCloudClient(service, authInfo)
+
+  expect_true(client$deleteContent("content-abc"))
+})
+
 test_that("inviteApplicationUser POSTs expected JSON fields to /contents/{id}/invitations", {
   skip_if_not_installed("webfakes")
 
@@ -1334,6 +1361,58 @@ test_that("updateContent includes envVar name and value in secrets when envVars 
       appMode = "shiny"
     )
   )
+})
+
+# --- access tests -------------------------------------------------------------
+
+test_that("createContent omits access when NULL and sends it when set", {
+  skip_if_not_installed("webfakes")
+
+  client <- local_echo_cloud_client("post", "/contents")
+  body <- client$createContent(
+    "my-app",
+    "My App",
+    "acct-1",
+    "shiny",
+    "app.R",
+    NULL
+  )
+  expect_false("access" %in% names(body))
+
+  body <- client$createContent(
+    "my-app",
+    "My App",
+    "acct-1",
+    "shiny",
+    "app.R",
+    NULL,
+    access = "view_team_edit_team"
+  )
+  expect_equal(body$access, "view_team_edit_team")
+})
+
+test_that("updateContent omits access when NULL and sends it when set", {
+  skip_if_not_installed("webfakes")
+
+  client <- local_echo_cloud_client("patch", "/contents/:id")
+  body <- client$updateContent(
+    "content-abc",
+    NULL,
+    FALSE,
+    "app.R",
+    "shiny"
+  )
+  expect_false("access" %in% names(body))
+
+  body <- client$updateContent(
+    "content-abc",
+    NULL,
+    FALSE,
+    "app.R",
+    "shiny",
+    access = "private"
+  )
+  expect_equal(body$access, "private")
 })
 
 test_that("getApplication() delegates to getContent and derives name from the title", {
