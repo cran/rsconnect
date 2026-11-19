@@ -39,7 +39,8 @@ configureApp <- function(
   if (is.null(appName)) {
     appName <- basename(appDir)
   }
-  application <- resolveApplication(accountDetails, appName)
+  client <- clientForAccount(accountDetails)
+  application <- resolveApplication(client, accountDetails, appName)
 
   displayStatus <- displayStatus(identical(logLevel, "quiet"))
 
@@ -56,25 +57,16 @@ configureApp <- function(
   }
 
   # set application properties
-  client <- clientForAccount(accountDetails)
   for (i in names(properties)) {
     propertyName <- i
     propertyValue <- properties[[i]]
 
-    # dispatch to the appropriate client implementation
-    if (is.function(client$setApplicationProperty)) {
-      client$setApplicationProperty(
-        application$id,
-        propertyName,
-        propertyValue
-      )
-    } else {
-      stop(
-        "Server ",
-        accountDetails$server,
-        " has no appropriate configuration method."
-      )
-    }
+    shinyappsSetApplicationProperty(
+      client,
+      application$id,
+      propertyName,
+      propertyValue
+    )
   }
 
   # redeploy application if requested
@@ -142,7 +134,8 @@ setProperty <- function(
   client <- clientForAccount(accountDetails)
   application <- getAppByName(client, accountDetails, deployment$name)
 
-  invisible(client$setApplicationProperty(
+  invisible(shinyappsSetApplicationProperty(
+    client,
     application$id,
     propertyName,
     propertyValue,
@@ -191,7 +184,8 @@ unsetProperty <- function(
   client <- clientForAccount(accountDetails)
   application <- getAppByName(client, accountInfo, deployment$name)
 
-  invisible(client$unsetApplicationProperty(
+  invisible(shinyappsUnsetApplicationProperty(
+    client,
     application$id,
     propertyName,
     force

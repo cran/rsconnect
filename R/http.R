@@ -207,10 +207,9 @@ handleResponse <- function(
     # Bounded by rsconnect.update_check_timeout so a slow/unreachable repo
     # can't meaningfully delay error reporting.
     newer <- tryCatch(checkForNewerVersion(), error = function(e) NULL)
-    hint <- if (!is.null(newer)) {
-      updateErrorHint(utils::packageVersion("rsconnect"), newer)
-    } else {
-      NULL
+    hint <- NULL
+    if (!is.null(newer)) {
+      hint <- updateErrorHint(utils::packageVersion("rsconnect"), newer)
     }
 
     # msg may be JSON; wrapping with "{msg}" avoids treating it as a formatting string.
@@ -513,12 +512,12 @@ parseHttpUrl <- function(urlText) {
     stop("Invalid url: ", urlText)
   }
 
-  url <- list()
-  url$protocol <- components[[2]]
-  url$host <- components[[3]]
-  url$port <- components[[4]]
-  url$path <- components[[5]]
-  url
+  list(
+    protocol = components[[2]],
+    host = components[[3]],
+    port = components[[4]],
+    path = components[[5]]
+  )
 }
 
 buildHttpUrl <- function(x) {

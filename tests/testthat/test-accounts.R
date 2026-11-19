@@ -195,30 +195,6 @@ test_that("registerAccount stores clientId and clientSecret", {
   expect_s3_class(info$clientSecret, "rsconnect_secret")
 })
 
-# Builds a fake Connect Cloud client whose getAccounts() returns the supplied
-# list. Used to drive connectCloudClientCredentials in tests without hitting the
-# network.
-fakeCloudClient <- function(accounts) {
-  list(
-    getAccounts = function() list(data = accounts)
-  )
-}
-
-# Mocks the OAuth exchange that connectCloudClientCredentials performs before
-# touching the API.
-mockClientCredentialsAuth <- function(
-  accessToken = "access-token",
-  refreshToken = NULL
-) {
-  function() {
-    list(
-      exchangeClientCredentials = function(clientId, clientSecret) {
-        list(access_token = accessToken, refresh_token = refreshToken)
-      }
-    )
-  }
-}
-
 test_that("connectCloudClientCredentials registers the named publishable account", {
   local_temp_config()
 
@@ -334,6 +310,60 @@ test_that("connectCloudClientCredentials distinguishes unpublishable accounts in
   )
 })
 
+test_that("connectCloudClientCredentials explains SSO accounts in errors", {
+  local_temp_config()
+
+  local_mocked_bindings(
+    cloudAuthClient = mockClientCredentialsAuth(),
+    connectCloudClient = function(service, authInfo) {
+      fakeCloudClient(list(
+        list(
+          id = "acc-1",
+          name = "sso-publisher",
+          role = "publisher",
+          sso_enabled = TRUE,
+          permissions = list()
+        ),
+        list(
+          id = "acc-2",
+          name = "sso-viewer",
+          role = "viewer",
+          sso_enabled = TRUE,
+          permissions = list()
+        )
+      ))
+    }
+  )
+
+  expect_error(
+    connectCloudClientCredentials(
+      clientId = "client-1",
+      clientSecret = "secret-1",
+      accountName = "sso-publisher",
+      quiet = TRUE
+    ),
+    "requires single sign-on"
+  )
+  expect_error(
+    connectCloudClientCredentials(
+      clientId = "client-1",
+      clientSecret = "secret-1",
+      accountName = "sso-publisher",
+      quiet = TRUE
+    ),
+    "connectCloudUser"
+  )
+  expect_error(
+    connectCloudClientCredentials(
+      clientId = "client-1",
+      clientSecret = "secret-1",
+      accountName = "sso-viewer",
+      quiet = TRUE
+    ),
+    "does not grant publish permission"
+  )
+})
+
 test_that("getSPCSAuthedUser passes snowflakeConnectionName to clientForAccount", {
   local_temp_config()
 
@@ -344,10 +374,10 @@ test_that("getSPCSAuthedUser passes snowflakeConnectionName to clientForAccount"
     clientForAccount = function(account) {
       # Check that snowflakeConnectionName is passed through
       expect_equal(account$snowflakeConnectionName, "test_connection")
-      fake_client(
-        "connectClient",
-        currentUser = function() list(id = "user123", username = "testuser")
-      )
+      fake_client("connectClient")
+    },
+    currentUser.connectClient = function(client) {
+      list(id = "user123", username = "testuser")
     }
   )
 
@@ -370,5 +400,33 @@ test_that("connectApiUser() aborts for shinyapps.io and Connect Cloud", {
   expect_error(
     connectApiUser(server = "connect.posit.cloud", apiKey = "key"),
     regexp = "`server` must be a Posit Connect server"
+  )
+})
+
+test_that("connectCloudUser() opens account creation when the login has no Connect Cloud user", {
+  local_temp_config()
+  local_cloud_login_without_user()
+  opened <- character()
+
+  expect_message(
+    connectCloudUser(launch.browser = function(url) opened <<- c(opened, url)),
+    "the Posit login that you use for it"
+  )
+
+  expect_length(opened, 2)
+  expect_match(opened[[2]], "/account/done")
+  account <- accountInfo("alice", "connect.posit.cloud")
+  expect_equal(account$accountId, "acc-1")
+  expect_equal(account$accessToken, "access-token")
+})
+
+test_that("connectCloudUser() shows the account creation URL without a browser", {
+  local_temp_config()
+  local_cloud_login_without_user()
+
+  expect_message(
+    connectCloudUser(launch.browser = FALSE),
+    "go to <https://connect.posit.cloud/account/done?",
+    fixed = TRUE
   )
 })

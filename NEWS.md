@@ -1,3 +1,46 @@
+# rsconnect 1.12.0
+
+* `writeManifest()` and `deployApp()` now use all R constraints in the
+  `Depends` field of a `DESCRIPTION` file. For example,
+  `Depends: R (>= 4.2.0), R (< 4.3)` gives `">= 4.2.0, < 4.3"` in
+  `manifest.json`. Before, rsconnect used only the first constraint. R does
+  not accept two constraints in one entry, such as `R (>= 4.2.0, < 4.3)`.
+  rsconnect now ignores this form and gives a warning (#1364).
+
+* rsconnect now reads an R constraint with no space after R, such as
+  `R(>= 4.2.0)`. It no longer reads a package whose name ends in "R", such as
+  `fooR (>= 1.0)`, as an R constraint (#1364).
+
+* Deployment records for Posit Connect content include the content GUID, in
+  a new `appGuid` field. Redeploys and `syncAppMetadata()` use it to look up
+  content with the v1 content API, and `deployments()` reports it as `appId`.
+  `deployApp(appId = )` accepts either the GUID or the numeric id. Records
+  without an `appGuid` look up content by numeric id, and gain an `appGuid`
+  the next time they are deployed or synced (#1374).
+
+* `applications()` builds the `config_url` for Posit Connect content from the
+  content GUID, so the links work on Connect 2026.01.0 and later (#1417).
+
+* Redeploying to Posit Connect Cloud without `envVars` no longer deletes the
+  content's secrets, including secrets added in the Connect Cloud UI. This
+  also applies to republishing from the RStudio IDE (#1413).
+
+* `connectCloudUser()` and `migrateToConnectCloud()` no longer fail with
+  "`serverName` must be a single string" when you approve the login code with
+  a Posit login that has no Posit Connect Cloud user. They now open the page
+  to create an account, and tell you to sign in with a different Posit login
+  if you already have an account (#1412).
+
+* `connectCloudClientCredentials()` now explains that client credentials
+  cannot publish to Posit Connect Cloud accounts that require single sign-on
+  (SSO), instead of reporting that the account does not grant publish
+  permission (#1408).
+
+* `deployApp()` respects `logLevel = "quiet"` on Posit Connect Cloud (#1401).
+
+* `showMetrics()` now gives a clear error when the account is not on
+  shinyapps.io. Other servers do not support metrics (#1400).
+
 # rsconnect 1.11.2
 
 * New `deleteContent()` permanently deletes content from Posit Connect Cloud.

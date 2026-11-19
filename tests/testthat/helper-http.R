@@ -180,3 +180,38 @@ local_echo_cloud_client <- function(method, path, env = parent.frame()) {
   )
   connectCloudClient(parseHttpUrl(proc$url()), authInfo)
 }
+
+# The condition that httpRequest() signals for an HTTP 401 response.
+http_401_error <- function() {
+  structure(
+    list(message = "HTTP 401"),
+    class = c("rsconnect_http_401", "rsconnect_http", "error", "condition")
+  )
+}
+
+# The condition for the HTTP 401 that Connect Cloud returns when the Posit
+# login has no Connect Cloud user.
+no_cloud_user_error <- function() {
+  structure(
+    list(message = "HTTP 401", errorType = "no_user_for_lucid_user"),
+    class = c("rsconnect_http_401", "rsconnect_http", "error", "condition")
+  )
+}
+
+current_user_service <- function() {
+  app <- env_cache(
+    cache,
+    "current_user_app",
+    {
+      json_app <- webfakes::new_app()
+      json_app$use(webfakes::mw_json())
+      json_app$get("/users/current", function(req, res) {
+        res$set_status(200L)$send_json(list(
+          username = jsonlite::unbox("susan")
+        ))
+      })
+      app <- webfakes::new_app_process(json_app)
+    }
+  )
+  parseHttpUrl(app$url())
+}

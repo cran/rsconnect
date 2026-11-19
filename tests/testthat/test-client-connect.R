@@ -70,9 +70,9 @@ test_that("waitForTask", {
   client <- connectClient(service, authInfo)
 
   # task messages are logged when not quiet.
-  expect_snapshot(invisible(client$waitForTask(101, quiet = FALSE)))
+  expect_snapshot(invisible(waitForTask(client, 101, quiet = FALSE)))
   # task messages are not logged when quiet.
-  expect_snapshot(invisible(client$waitForTask(42, quiet = TRUE)))
+  expect_snapshot(invisible(waitForTask(client, 42, quiet = TRUE)))
 })
 
 test_that("getApplication() fills in dashboard_url from guid when missing", {
@@ -95,7 +95,7 @@ test_that("getApplication() fills in dashboard_url from guid when missing", {
   authInfo <- list(apiKey = "the-api-key")
   client <- connectClient(service, authInfo)
 
-  result <- client$getApplication(101, "unknown")
+  result <- getApplication(client, 101)
   expect_equal(
     result$dashboard_url,
     connectDashboardUrl(
@@ -103,6 +103,62 @@ test_that("getApplication() fills in dashboard_url from guid when missing", {
       "3bfbd98a-6d6d-41bd-a15f-cab52025742f"
     )
   )
+})
+
+test_that("getApplication() uses the v1 content API for a guid", {
+  skip_if_not_installed("webfakes")
+
+  app <- webfakes::new_app()
+  app$use(webfakes::mw_json())
+  app$get("/v1/content/:guid", function(req, res) {
+    res$set_status(200L)$send_json(
+      list(
+        id = "101",
+        guid = req$params$guid,
+        content_url = "https://connect.example/content/abc/",
+        dashboard_url = "https://connect.example/connect/#/apps/abc"
+      ),
+      auto_unbox = TRUE
+    )
+  })
+  process <- webfakes::new_app_process(app)
+  service <- parseHttpUrl(process$url())
+
+  client <- connectClient(service, list(apiKey = "the-api-key"))
+
+  result <- getApplication(client, "abc")
+  expect_equal(result$guid, "abc")
+  expect_equal(result$id, "101")
+  expect_equal(result$url, "https://connect.example/content/abc/")
+  expect_equal(
+    result$dashboard_url,
+    "https://connect.example/connect/#/apps/abc"
+  )
+})
+
+test_that("findContent() prefers the record's guid over its numeric id", {
+  requested <- NULL
+  local_mocked_bindings(
+    getApplication.connectClient = function(client, applicationId) {
+      requested <<- applicationId
+      list(url = "https://connect.example/content/abc/")
+    }
+  )
+  client <- fake_client("connectClient")
+
+  findContent(
+    client,
+    list(appId = "101", appGuid = "abc", server = "example.com"),
+    quiet = TRUE
+  )
+  expect_equal(requested, "abc")
+
+  findContent(
+    client,
+    list(appId = "101", appGuid = NA, server = "example.com"),
+    quiet = TRUE
+  )
+  expect_equal(requested, "101")
 })
 
 # Tests for Snowflake authentication with auto-detection
@@ -194,11 +250,7 @@ test_that("extractSnowflakeAccount handles various hostname formats", {
 })
 
 
-test_that("connectDashboardUrl builds the dashboard URL from a server URL and id", {
-  expect_equal(
-    connectDashboardUrl("https://connect.example.com/__api__", "42"),
-    "https://connect.example.com/connect/#/apps/42"
-  )
+test_that("connectDashboardUrl builds the dashboard URL from a server URL and GUID", {
   expect_equal(
     connectDashboardUrl(
       "https://connect.example.com/__api__",
@@ -206,4 +258,233 @@ test_that("connectDashboardUrl builds the dashboard URL from a server URL and id
     ),
     "https://connect.example.com/connect/#/apps/3bfbd98a-6d6d-41bd-a15f-cab52025742f"
   )
+})
+
+test_that("uploadBundle POSTs the bundle to the content guid and returns it", {
+  skip_if_not_installed("webfakes")
+
+  bundlePath <- withr::local_tempfile(fileext = ".tar.gz")
+  writeLines("bundle contents", bundlePath)
+
+  app <- webfakes::new_app()
+  app$use(webfakes::mw_json())
+  app$post("/v1/content/:guid/bundles", function(req, res) {
+    res$set_status(200L)$send_json(
+      list(id = paste0("bundle-for-", req$params$guid)),
+      auto_unbox = TRUE
+    )
+  })
+  proc <- webfakes::local_app_process(app)
+  service <- parseHttpUrl(proc$url())
+  client <- connectClient(service, list(server = "example.com"))
+
+  bundle <- uploadBundle(client, list(guid = "guid-1"), bundlePath)
+  expect_equal(bundle$id, "bundle-for-guid-1")
+})
+
+test_that("createContent() POSTs the name and title to v1/content", {
+  sent <- NULL
+  local_mocked_bindings(
+    POST_JSON = function(service, authInfo, path, json) {
+      sent <<- list(path = path, json = json)
+      list(
+        id = "99",
+        guid = "guid-99",
+        content_url = "https://example.com/content/guid-99/",
+        dashboard_url = "https://example.com/connect/#/apps/guid-99"
+      )
+    }
+  )
+  client <- connectClient(list(), list())
+
+  application <- createContent(
+    client,
+    deployment = list(name = "my-app", title = "My App"),
+    accountDetails = list(accountId = "1"),
+    appMetadata = list(appMode = "shiny")
+  )
+
+  expect_equal(sent$path, "/v1/content")
+  expect_equal(sent$json, list(name = "my-app", title = "My App"))
+  expect_equal(
+    application,
+    list(
+      id = "99",
+      guid = "guid-99",
+      url = "https://example.com/content/guid-99/",
+      dashboard_url = "https://example.com/connect/#/apps/guid-99"
+    )
+  )
+})
+
+test_that("createContent() does not send an empty title", {
+  sent <- NULL
+  local_mocked_bindings(
+    POST_JSON = function(service, authInfo, path, json) {
+      sent <<- json
+      list()
+    }
+  )
+  client <- connectClient(list(), list())
+
+  createContent(
+    client,
+    deployment = list(name = "my-app", title = ""),
+    accountDetails = list(accountId = "1"),
+    appMetadata = list(appMode = "shiny")
+  )
+
+  expect_equal(sent, list(name = "my-app"))
+})
+
+test_that("findContent() gets the application for the deployment record", {
+  requested <- NULL
+  local_mocked_bindings(
+    getApplication.connectClient = function(
+      client,
+      applicationId
+    ) {
+      requested <<- applicationId
+      list(id = applicationId, url = "https://example.com/content/42/")
+    }
+  )
+  client <- fake_client("connectClient")
+
+  application <- findContent(
+    client,
+    deployment = list(appId = "42", version = "1"),
+    quiet = TRUE
+  )
+
+  expect_equal(requested, "42")
+  expect_equal(application$id, "42")
+})
+
+test_that("prepareContent() sets the env vars of the deployment", {
+  sent <- NULL
+  local_mocked_bindings(
+    connectSetEnvVars = function(client, guid, vars) {
+      sent <<- list(guid = guid, vars = vars)
+    }
+  )
+  client <- fake_client("connectClient")
+  application <- list(id = "42", guid = "guid-42")
+
+  result <- prepareContent(
+    client,
+    application,
+    deployment = list(envVars = c("A", "B")),
+    appMetadata = list(),
+    appVisibility = NULL,
+    isNewContent = FALSE,
+    upload = TRUE,
+    quiet = TRUE
+  )
+
+  expect_equal(sent, list(guid = "guid-42", vars = c("A", "B")))
+  expect_equal(result, application)
+})
+
+test_that("prepareContent() does not set env vars when the deployment has none", {
+  local_mocked_bindings(
+    connectSetEnvVars = function(...) stop("setEnvVars() should not be called")
+  )
+  client <- fake_client("connectClient")
+
+  expect_no_error(prepareContent(
+    client,
+    list(id = "42", guid = "guid-42"),
+    deployment = list(envVars = NULL),
+    appMetadata = list(),
+    appVisibility = NULL,
+    isNewContent = FALSE,
+    upload = TRUE,
+    quiet = TRUE
+  ))
+})
+
+test_that("activateContent() deploys the bundle and waits for the task", {
+  deployed <- NULL
+  waited <- NULL
+  local_mocked_bindings(
+    connectDeployApplication = function(client, application, bundleId = NULL) {
+      deployed <<- list(guid = application$guid, bundleId = bundleId)
+      list(task_id = "task-1")
+    },
+    waitForTask.connectClient = function(client, taskId, quiet = FALSE) {
+      waited <<- taskId
+      list(finished = TRUE, code = 0)
+    }
+  )
+  client <- fake_client("connectClient")
+  application <- list(guid = "guid-42", url = "https://example.com/42/")
+
+  result <- activateContent(
+    client,
+    application,
+    bundle = list(id = "bundle-1"),
+    quiet = TRUE
+  )
+
+  expect_equal(deployed, list(guid = "guid-42", bundleId = "bundle-1"))
+  expect_equal(waited, "task-1")
+  expect_equal(
+    result,
+    list(succeeded = TRUE, url = "https://example.com/42/", error = NULL)
+  )
+})
+
+test_that("activateContent() reports a failed task", {
+  local_mocked_bindings(
+    connectDeployApplication = function(...) list(task_id = "task-1"),
+    waitForTask.connectClient = function(...) {
+      list(code = 1, error = "Build failed")
+    }
+  )
+  client <- fake_client("connectClient")
+
+  result <- activateContent(
+    client,
+    list(guid = "guid-42", url = "https://example.com/42/"),
+    bundle = list(id = "bundle-1"),
+    quiet = TRUE
+  )
+
+  expect_false(result$succeeded)
+  expect_equal(result$error, "Build failed")
+})
+
+test_that("listApplications() filters by account and by name", {
+  sent <- list()
+  local_mocked_bindings(
+    listApplicationsRequest = function(service, authInfo, path, query, ...) {
+      sent[[length(sent) + 1]] <<- list(path = path, query = query)
+      list()
+    }
+  )
+  client <- connectClient(list(), list())
+
+  listApplications(client, "1")
+  listApplications(client, "1", filters = list(name = "my-app"))
+
+  expect_equal(sent[[1]]$path, "/applications")
+  expect_equal(sent[[1]]$query, "filter=account_id:1")
+  expect_equal(sent[[2]]$query, "filter=account_id:1&filter=name:my-app")
+})
+
+test_that("currentUser() GETs the current user", {
+  requested <- NULL
+  local_mocked_bindings(
+    GET = function(service, authInfo, path, ...) {
+      requested <<- list(service = service, path = path)
+      list(id = 1, username = "me")
+    }
+  )
+  client <- connectClient(list(host = "connect.example.com"), list())
+
+  user <- currentUser(client)
+
+  expect_equal(requested$service, list(host = "connect.example.com"))
+  expect_equal(requested$path, "/users/current")
+  expect_equal(user, list(id = 1, username = "me"))
 })

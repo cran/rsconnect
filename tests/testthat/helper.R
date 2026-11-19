@@ -132,6 +132,7 @@ addTestDeployment <- function(
   appName = "test",
   appTitle = "",
   appId = "123",
+  appGuid = NULL,
   account = "ron",
   envVars = NULL,
   username = account,
@@ -151,7 +152,8 @@ addTestDeployment <- function(
       account = account,
       username = username,
       server = server,
-      version = version
+      version = version,
+      appGuid = appGuid
     ),
     application = list(id = appId, url = url),
     hostUrl = hostUrl,
@@ -171,10 +173,10 @@ local_mocked_account_info <- function(env = caller_env()) {
 
 # Posit Connect Cloud deploy fixtures -------------------------------------
 
-# Existing PCC content with a NULL current_revision.
+# Existing PCC content with a NULL current_revision. Connect Cloud content has
+# no top-level `url`; only a revision has one.
 pcc_existing_content_null_revision <- list(
   id = "content-abc",
-  url = "https://connect.posit.cloud/myaccount/content/content-abc",
   current_revision = NULL,
   next_revision = list(
     id = "rev-new",
@@ -187,6 +189,15 @@ pcc_existing_content_with_revision <- utils::modifyList(
   pcc_existing_content_null_revision,
   list(current_revision = list(id = "rev-old"))
 )
+
+# An activateContent() method for PCC that reports a successful deploy.
+pcc_activate_success <- function(client, application, bundle, quiet) {
+  list(
+    succeeded = TRUE,
+    url = "https://connect.posit.cloud/myaccount/content/content-abc",
+    error = NULL
+  )
+}
 
 # Set up a PCC server, account, and (optionally) a re-deploy record.
 local_pcc_deploy_env <- function(
@@ -211,22 +222,49 @@ local_pcc_deploy_env <- function(
   }
 }
 
-# A PCC client whose deleteContent() passes the content id to `deleted`.
+# A PCC client whose content delete passes the content id to `deleted`.
 local_mock_pcc_delete_client <- function(deleted, env = caller_env()) {
   local_mocked_bindings(
-    clientForAccount = function(...) {
-      fake_client(
-        "connectCloudClient",
-        getContent = function(contentId) {
-          list(id = contentId, title = "My App")
-        },
-        deleteContent = function(contentId) {
-          deleted(contentId)
-          invisible(TRUE)
-        }
-      )
+    clientForAccount = function(...) fake_client("connectCloudClient"),
+    connectCloudGetContent = function(client, contentId) {
+      list(id = contentId, title = "My App")
+    },
+    connectCloudDeleteContent = function(client, contentId) {
+      deleted(contentId)
+      invisible(TRUE)
     },
     .env = env
+  )
+}
+
+# calls createContent() for a Connect Cloud client with a small deployment.
+create_cloud_content <- function(client, envVars = NULL, appVisibility = NULL) {
+  createContent(
+    client,
+    deployment = list(name = "my-app", title = "My App", envVars = envVars),
+    accountDetails = list(accountId = "acct-1"),
+    appMetadata = list(appMode = "shiny", appPrimaryDoc = "app.R"),
+    appVisibility = appVisibility
+  )
+}
+
+# Calls prepareContent() for existing Connect Cloud content with a small
+# deployment.
+update_cloud_content <- function(
+  client,
+  envVars = NULL,
+  appVisibility = NULL,
+  upload = FALSE
+) {
+  prepareContent(
+    client,
+    application = list(id = "content-abc"),
+    deployment = list(envVars = envVars),
+    appMetadata = list(appMode = "shiny", appPrimaryDoc = "app.R"),
+    appVisibility = appVisibility,
+    isNewContent = FALSE,
+    upload = upload,
+    quiet = TRUE
   )
 }
 
@@ -253,4 +291,247 @@ expect_known_manifest_fields <- function(manifest) {
     "users"
   )
   expect_in(names(manifest), known_fields)
+}
+
+# Connect Cloud client credentials ---------------------------------------
+
+# Builds a fake Connect Cloud client whose requests return the supplied
+# accounts as one page. Used to drive connectCloudClientCredentials in tests
+# without hitting the network.
+fakeCloudClient <- function(accounts) {
+  fake_client(
+    "connectCloudClient",
+    withTokenRefreshRetry = function(request_fn, path, ...) {
+      list(data = accounts, total = length(accounts))
+    }
+  )
+}
+
+# Mocks the OAuth exchange that connectCloudClientCredentials performs before
+# touching the API.
+mockClientCredentialsAuth <- function(
+  accessToken = "access-token",
+  refreshToken = NULL
+) {
+  function() {
+    list(
+      exchangeClientCredentials = function(clientId, clientSecret) {
+        list(access_token = accessToken, refresh_token = refreshToken)
+      }
+    )
+  }
+}
+
+# Quarto -----------------------------------------------------------------
+
+fakeQuartoMetadata <- function(version, engines) {
+  # See quarto-r/R/publish.R lines 396 and 113.
+  metadata <- list()
+  metadata$quarto_version <- version
+  metadata$quarto_engines <- I(engines)
+  return(metadata)
+}
+
+# Some versions of Quarto show Quarto stack traces with source references when
+# inspect fails.
+#
+# Only preserve:
+#
+#   Error in `quartoInspect()`:
+#   ! Failed to run `quarto inspect` against your content:
+#   ERROR: Unsupported project type unsupported
+strip_quarto_trace <- function(lines) {
+  head(lines, 3)
+}
+
+# Deployment targets -----------------------------------------------------
+
+confirm_existing_app_used <- function(server) {
+  local_temp_config()
+  addTestServer()
+  addTestAccount("ron", server = server)
+  local_mocked_bindings(
+    getAppByName = function(...) {
+      data.frame(
+        name = "my_app",
+        id = 123,
+        url = "http://example.com/test",
+        stringsAsFactors = FALSE
+      )
+    },
+    shouldUpdateApp = function(...) TRUE
+  )
+
+  app_dir <- withr::local_tempdir()
+  target <- findDeploymentTarget(app_dir, appName = "my_app", server = server)
+  deployment <- target$deployment
+  expect_equal(deployment$appId, 123)
+}
+
+confirm_existing_app_not_used <- function(server) {
+  local_temp_config()
+  addTestServer()
+  addTestAccount("ron", server = server)
+  local_mocked_bindings(
+    getAppByName = function(...) {
+      data.frame(
+        name = "my_app",
+        id = 123,
+        url = "http://example.com/test",
+        stringsAsFactors = FALSE
+      )
+    },
+    shouldUpdateApp = function(...) FALSE
+  )
+
+  app_dir <- withr::local_tempdir()
+  target <- findDeploymentTarget(app_dir, appName = "my_app", server = server)
+  deployment <- target$deployment
+  expect_equal(deployment$name, "my_app-1")
+  expect_equal(deployment$appId, NULL)
+}
+
+# Identity federation ----------------------------------------------------
+
+# Helper to create a clean API key cache for tests
+local_api_key_cache <- function(env = caller_env()) {
+  nms <- env_names(apiKeyCache)
+  zaps <- rep_named(nms, list(zap()))
+
+  old <- env_bind(apiKeyCache, !!!zaps)
+  withr::defer(env_bind(apiKeyCache, !!!old), envir = env)
+}
+
+# Migration to Connect Cloud ---------------------------------------------
+
+# Helper: write a minimal fixture DCF for a shinyapps.io deployment.
+write_shinyapps_dcf <- function(
+  appDir,
+  appName = "myapp",
+  account = "myaccount"
+) {
+  dcfDir <- file.path(appDir, "rsconnect", "shinyapps.io", account)
+  dir.create(dcfDir, recursive = TRUE)
+  dcfPath <- file.path(dcfDir, paste0(appName, ".dcf"))
+  write.dcf(
+    list(
+      name = appName,
+      title = "My App",
+      username = account,
+      account = account,
+      server = "shinyapps.io",
+      hostUrl = "https://api.shinyapps.io/v1",
+      appId = "42",
+      bundleId = "7",
+      url = paste0("https://", account, ".shinyapps.io/", appName),
+      version = "1"
+    ),
+    dcfPath,
+    width = 4096
+  )
+  dcfPath
+}
+
+# An accounts() frame with both a shinyapps.io and a Connect Cloud account.
+shinyapps_and_cc_accounts <- data.frame(
+  name = c("myaccount", "cc-account"),
+  server = c("shinyapps.io", "connect.posit.cloud"),
+  stringsAsFactors = FALSE
+)
+
+# Helper: install the Connect Cloud mocks migrateToConnectCloud() relies on.
+# Every knob has a sensible default; tests override only what they exercise.
+#   - accounts:       the accounts() frame (defaults to a single CC account)
+#   - title:          content title returned by getContent()
+#   - account_id:     owning account id returned by getContent()
+#   - owned_accounts: the accounts getAccounts() reports a role on
+#   - get_content:    override the whole getContent() function (e.g. to error)
+#   - client:         override the whole clientForAccount() function
+local_migrate_mocks <- function(
+  accounts = data.frame(
+    name = "cc-account",
+    server = "connect.posit.cloud",
+    stringsAsFactors = FALSE
+  ),
+  title = "My App",
+  account_id = "acct-1",
+  owned_accounts = list(list(id = "acct-1", name = "cc-account")),
+  get_content = NULL,
+  client = NULL,
+  .env = parent.frame()
+) {
+  get_content <- get_content %||%
+    function(id) {
+      list(id = id, title = title, account_id = account_id, state = "active")
+    }
+  local_mocked_bindings(
+    connectCloudGetContent = function(client, contentId) get_content(contentId),
+    connectCloudGetAccounts = function(client) list(data = owned_accounts),
+    .env = .env
+  )
+  client <- client %||%
+    function(...) {
+      fake_client("connectCloudClient")
+    }
+  local_mocked_bindings(
+    accounts = function(...) accounts,
+    findAccountInfo = function(...) {
+      list(
+        name = "cc-account",
+        server = "connect.posit.cloud",
+        accessToken = "tok"
+      )
+    },
+    clientForAccount = client,
+    .package = "rsconnect",
+    .env = .env
+  )
+}
+
+# Manifests --------------------------------------------------------------
+
+makeManifest <- function(appDir, appPrimaryDoc = NULL, ...) {
+  writeManifest(appDir, appPrimaryDoc = appPrimaryDoc, ..., quiet = TRUE)
+  manifestFile <- file.path(appDir, "manifest.json")
+  data <- readLines(manifestFile, warn = FALSE, encoding = "UTF-8")
+  manifestJson <- jsonlite::fromJSON(data)
+  unlink(manifestFile)
+  manifestJson
+}
+
+# Mocks a connectCloudUser() login with a Posit login that has no Connect Cloud
+# user. The first GET /accounts returns the 401 for that case, and later calls
+# return a publishable account named "alice", as if the user created it.
+# Sys.sleep() does nothing, so the polling for the account does not wait.
+local_cloud_login_without_user <- function(env = caller_env()) {
+  get_count <- 0
+  local_mocked_bindings(
+    cloudAuthClient = function() {
+      list(
+        createDeviceAuth = function() {
+          list(
+            verification_uri_complete = "https://login/device",
+            user_code = "CODE"
+          )
+        }
+      )
+    },
+    waitForDeviceAuth = function(authClient, deviceAuth) {
+      list(access_token = "access-token", refresh_token = "refresh-token")
+    },
+    GET = function(service, authInfo, path, ...) {
+      get_count <<- get_count + 1
+      if (get_count == 1) {
+        stop(no_cloud_user_error())
+      }
+      account <- list(
+        id = "acc-1",
+        name = "alice",
+        permissions = list("content:create")
+      )
+      list(data = list(account), total = 1)
+    },
+    Sys.sleep = function(time) NULL,
+    .env = env
+  )
 }

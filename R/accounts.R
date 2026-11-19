@@ -152,7 +152,7 @@ getSPCSAuthedUser <- function(server, apiKey, snowflakeConnectionName) {
   )
 
   client <- clientForAccount(account)
-  client$currentUser()
+  currentUser(client)
 }
 
 #' @rdname connectApiUser
@@ -316,15 +316,21 @@ connectCloudClientCredentials <- function(
     )
   )
 
-  accounts <- client$getAccounts()$data
+  accounts <- connectCloudGetAccounts(client)$data
   publishable <- filterPublishableAccounts(accounts)
   account <- Find(function(a) identical(a$name, accountName), publishable)
   if (is.null(account)) {
-    visible <- !is.null(Find(
-      function(a) identical(a$name, accountName),
-      accounts
-    ))
-    if (visible) {
+    visibleAccount <- Find(function(a) identical(a$name, accountName), accounts)
+    # The server does not grant content:create on SSO accounts to tokens
+    # without a recent SSO login, which client credentials never have.
+    ssoBlocked <- isTRUE(visibleAccount$sso_enabled) &&
+      isTRUE(visibleAccount$role %in% c("owner", "admin", "publisher"))
+    if (ssoBlocked) {
+      cli::cli_abort(c(
+        "Account {.val {accountName}} requires single sign-on (SSO). Client credentials cannot publish to accounts that require SSO.",
+        i = "Use {.fn connectCloudUser} to log in interactively with SSO instead."
+      ))
+    } else if (!is.null(visibleAccount)) {
       cli::cli_abort(
         "Account {.val {accountName}} is visible to these credentials but does not grant publish permission."
       )
@@ -366,7 +372,7 @@ selectCloudAccount <- function(
 ) {
   getAccounts <- function() {
     tryCatch(
-      client$getAccounts()$data,
+      connectCloudGetAccounts(client)$data,
       rsconnect_http_401 = function(err) {
         if (isTRUE(err$errorType == "no_user_for_lucid_user")) {
           return(list())
@@ -398,9 +404,12 @@ selectCloudAccount <- function(
         launch.browser(accountCreationPage)
       } else {
         cli::cli_alert_info(
-          "To deploy, you must first create an account. Please go to {.url accountCreationPage} to create one."
+          "To deploy, you must first create an account. Please go to {.url {accountCreationPage}} to create one."
         )
       }
+      cli::cli_alert_info(
+        "If you already have a Connect Cloud account, sign in to {.url {cloudUiUrl}} with the Posit login that you use for it, then try again."
+      )
       # poll for account for up to 10 minutes
       for (i in 1:300) {
         Sys.sleep(2)
@@ -522,7 +531,7 @@ getAuthToken <- function(server, userId = 0) {
   cachedApiKey <- getCachedApiKey(serverUrl)
   if (!is.null(cachedApiKey)) {
     # Verify that the API key actually works.
-    user <- tryCatch(client$currentUser(), error = function(e) NULL)
+    user <- tryCatch(currentUser(client), error = function(e) NULL)
     if (!is.null(user)) {
       # Return the API key as the "token" with a zero-length private key.
       # waitForAuthedUser will use this to detect federated authentication later
@@ -545,11 +554,14 @@ getAuthToken <- function(server, userId = 0) {
   token <- generateToken()
 
   # Send public key to server, and generate URL where the token can be claimed
-  response <- client$addToken(list(
-    token = token$token,
-    public_key = token$public_key,
-    user_id = 0L
-  ))
+  response <- connectAddToken(
+    client,
+    list(
+      token = token$token,
+      public_key = token$public_key,
+      user_id = 0L
+    )
+  )
 
   list(
     token = token$token,
@@ -634,7 +646,7 @@ getAuthedUser <- function(
     private_key = private_key
   )
   client <- clientForAccount(account)
-  client$currentUser()
+  currentUser(client)
 }
 
 #' Register account on shinyapps.io
@@ -701,10 +713,10 @@ findShinyAppsAccountId <- function(
   account <- list(token = token, secret = secret, server = server)
   client <- clientForAccount(account)
 
-  userId <- client$currentUser()$id
+  userId <- currentUser(client)$id
 
   accountId <- NULL
-  accounts <- client$accountsForUser(userId)
+  accounts <- shinyappsAccountsForUser(client, userId)
   for (account in accounts) {
     if (identical(account$name, name)) {
       return(account$id)

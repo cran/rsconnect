@@ -94,7 +94,7 @@ test_that("uses appId without local deployment record; created by local account"
   addTestAccount("leslie", "local")
 
   local_mocked_bindings(
-    getApplication = function(...) {
+    getApplicationForAccount = function(...) {
       data.frame(
         id = "the-appid",
         name = "remote-record",
@@ -126,7 +126,7 @@ test_that("uses appId without local deployment record; created by collaborator",
   app_dir <- withr::local_tempdir()
 
   local_mocked_bindings(
-    getApplication = function(...) {
+    getApplicationForAccount = function(...) {
       data.frame(
         id = "the-appid",
         name = "remote-record",
@@ -250,6 +250,21 @@ test_that("succeeds if there's a single existing deployment", {
   expect_equal(deployment$account, "ron")
   expect_equal(deployment$server, "example.com")
   expect_equal(deployment$version, "999")
+})
+
+test_that("guid from an existing deployment record is carried forward", {
+  local_temp_config()
+  addTestServer("example.com")
+  addTestAccount("ron")
+
+  app_dir <- withr::local_tempdir()
+  addTestDeployment(app_dir, appId = "1", appGuid = "the-guid")
+
+  target <- findDeploymentTarget(app_dir)
+  expect_equal(target$deployment$appGuid, "the-guid")
+
+  target <- findDeploymentTarget(app_dir, appId = "1")
+  expect_equal(target$deployment$appGuid, "the-guid")
 })
 
 test_that("appId is used even when name does not match", {
@@ -411,28 +426,6 @@ test_that("default title is the empty string", {
   expect_equal(deployment$title, "")
 })
 
-confirm_existing_app_used <- function(server) {
-  local_temp_config()
-  addTestServer()
-  addTestAccount("ron", server = server)
-  local_mocked_bindings(
-    getAppByName = function(...) {
-      data.frame(
-        name = "my_app",
-        id = 123,
-        url = "http://example.com/test",
-        stringsAsFactors = FALSE
-      )
-    },
-    shouldUpdateApp = function(...) TRUE
-  )
-
-  app_dir <- withr::local_tempdir()
-  target <- findDeploymentTarget(app_dir, appName = "my_app", server = server)
-  deployment <- target$deployment
-  expect_equal(deployment$appId, 123)
-}
-
 test_that("can find existing application on server & use it", {
   confirm_existing_app_used("example.com")
 })
@@ -440,29 +433,6 @@ test_that("can find existing application on server & use it", {
 test_that("can find existing application on shinyapps.io & use it", {
   confirm_existing_app_used("shinyapps.io")
 })
-
-confirm_existing_app_not_used <- function(server) {
-  local_temp_config()
-  addTestServer()
-  addTestAccount("ron", server = server)
-  local_mocked_bindings(
-    getAppByName = function(...) {
-      data.frame(
-        name = "my_app",
-        id = 123,
-        url = "http://example.com/test",
-        stringsAsFactors = FALSE
-      )
-    },
-    shouldUpdateApp = function(...) FALSE
-  )
-
-  app_dir <- withr::local_tempdir()
-  target <- findDeploymentTarget(app_dir, appName = "my_app", server = server)
-  deployment <- target$deployment
-  expect_equal(deployment$name, "my_app-1")
-  expect_equal(deployment$appId, NULL)
-}
 
 test_that("can find existing application on server & not use it", {
   confirm_existing_app_not_used("example.com")
@@ -518,18 +488,22 @@ test_that("findDeploymentTargetByAppId works for PCC with no local deployment re
   addTestAccount("myaccount", server = "connect.posit.cloud")
 
   local_mocked_bindings(
-    clientForAccount = function(...) {
-      fake_client(
-        "connectCloudClient",
-        getApplication = function(applicationId, deploymentRecordVersion) {
-          list(
-            id = applicationId,
-            title = "My PCC App",
-            # Real client derives a valid record name from the title.
-            name = "my_pcc_app"
-          )
-        }
+    getApplication.connectCloudClient = function(
+      client,
+      applicationId,
+      deploymentRecordVersion
+    ) {
+      list(
+        id = applicationId,
+        title = "My PCC App",
+        # Real client derives a valid record name from the title.
+        name = "my_pcc_app"
       )
+    }
+  )
+  local_mocked_bindings(
+    clientForAccount = function(...) {
+      fake_client("connectCloudClient")
     }
   )
 
@@ -584,7 +558,8 @@ test_that("createDeploymentFromApplication promotes fields", {
         id = "1",
         name = "app-name",
         title = "app-title",
-        owner_username = "alice.username"
+        owner_username = "alice.username",
+        guid = "the-guid"
       ),
       accountDetails = list(
         name = "alice",
@@ -599,7 +574,8 @@ test_that("createDeploymentFromApplication promotes fields", {
       username = "alice.username",
       account = "alice",
       server = "example.com",
-      version = deploymentRecordVersion
+      version = deploymentRecordVersion,
+      appGuid = "the-guid"
     )
   )
 })
@@ -628,7 +604,8 @@ test_that("updateDeployment updates fields", {
       username = "alice.username",
       account = "alice",
       server = "example.com",
-      version = deploymentRecordVersion
+      version = deploymentRecordVersion,
+      appGuid = NULL
     )
   )
 })
@@ -657,7 +634,27 @@ test_that("updateDeployment ignores NULL updates", {
       username = "alice.username",
       account = "alice",
       server = "example.com",
-      version = deploymentRecordVersion
+      version = deploymentRecordVersion,
+      appGuid = NULL
     )
   )
+})
+
+test_that("appId matches a local record by guid", {
+  local_temp_config()
+  addTestServer("example.com")
+  addTestAccount("ron")
+
+  app_dir <- withr::local_tempdir()
+  addTestDeployment(
+    app_dir,
+    appName = "local-record",
+    appId = "1",
+    appGuid = "the-guid"
+  )
+
+  target <- findDeploymentTarget(app_dir, appId = "the-guid")
+  expect_equal(target$deployment$name, "local-record")
+  expect_equal(target$deployment$appId, "1")
+  expect_equal(target$deployment$appGuid, "the-guid")
 })

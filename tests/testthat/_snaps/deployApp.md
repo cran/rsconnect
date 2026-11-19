@@ -41,7 +41,7 @@
 # applicationDeleted() errors or prompts as needed
 
     Code
-      applicationDeleted(client, target, app)
+      applicationDeleted(target, app)
     Condition
       Error in `applicationDeleted()`:
       ! Failed to find existing content on server; it's probably been deleted.
@@ -51,7 +51,7 @@
 ---
 
     Code
-      . <- applicationDeleted(client, target, app)
+      applicationDeleted(target, app)
     Message
       Failed to find existing content on server; it's probably been deleted.
       What do you want to do?
@@ -108,12 +108,12 @@
 # checkAppVisibility() rejects values the server doesn't support
 
     Code
-      checkAppVisibility("view_team_edit_team", "shinyapps.io")
+      checkAppVisibility("view_team_edit_team", shinyapps)
     Condition
       Error:
       ! `appVisibility` must be one of "private" or "public", not "view_team_edit_team".
     Code
-      checkAppVisibility("privat", "connect.posit.cloud")
+      checkAppVisibility("privat", cloud)
     Condition
       Error:
       ! `appVisibility` must be one of "private", "public", "view_team_edit_private", "view_team_edit_team", or "view_public_edit_team", not "privat".
